@@ -62,7 +62,7 @@
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--border);
-      padding: calc(env(safe-area-inset-top, 10px) + 8px) 16px 12px;
+      padding: calc(env(safe-area-inset-top, 12px) + 16px) 16px 12px;
     }
 
     .brand-row {
@@ -827,15 +827,11 @@
 
         <!-- Official HK LandsD / CSDI Bilingual Map Preview -->
         <div class="panel">
-          <div class="panel-title">
-            <span>🗺️ Live Route & Official HK CSDI Map</span>
-            <span class="source-tag source-csdi">LandsD + OSRM</span>
-          </div>
-          <div class="map-actions-row">
-            <button class="icon-btn" id="directions-btn" style="background: var(--taxi-blue); border-color: transparent;">
-              🧭 Directions from My GPS
+          <div class="map-actions-row" style="flex-direction: column; align-items: stretch; gap: 6px;">
+            <button class="primary-btn" id="directions-btn" style="width: 100%; background: var(--taxi-blue);">
+              🧭 Directions from my location
             </button>
-            <span class="map-metrics" id="route-metrics"></span>
+            <span class="map-metrics" id="route-metrics" style="text-align: center;"></span>
           </div>
           <div id="mini-map"></div>
         </div>
@@ -1202,9 +1198,10 @@
     }
 
     function searchOfflineCurated(query) {
+      const list = window.HK_OFFLINE_PLACES || [];
       const q = query.trim().toLowerCase();
-      if (!q) return window.HK_OFFLINE_PLACES;
-      return window.HK_OFFLINE_PLACES.filter((p) => {
+      if (!q) return list;
+      return list.filter((p) => {
         const hay = `${p.nameEn} ${p.nameZh} ${p.driverZh} ${p.streetEn} ${p.streetZh} ${p.districtEn} ${p.districtZh} ${p.keywords || ''}`.toLowerCase();
         return q.split(/\s+/).every((tok) => hay.includes(tok));
       });
@@ -1344,19 +1341,20 @@
     });
 
     function renderCurrentView() {
+      const offlineList = window.HK_OFFLINE_PLACES || [];
       if (activeCategory === 'SAVED') {
         resultsHeading.textContent = '★ Saved Destinations';
-        const list = savedIds.map((id) => savedPlacesMap[id] || window.HK_OFFLINE_PLACES.find((p) => p.id === id)).filter(Boolean);
+        const list = savedIds.map((id) => savedPlacesMap[id] || offlineList.find((p) => p.id === id)).filter(Boolean);
         renderPlaceList(list, 'Tap ☆ on any building or address to save it offline here.');
       } else if (activeCategory === 'RECENT') {
         resultsHeading.textContent = '🕘 Recently Viewed';
         renderPlaceList(recentPlaces, 'Your recently opened taxi flashcards will appear here.');
       } else if (activeCategory === 'ALL') {
         resultsHeading.textContent = 'Popular Hong Kong Destinations';
-        renderPlaceList(window.HK_OFFLINE_PLACES);
+        renderPlaceList(offlineList);
       } else {
         resultsHeading.textContent = activeCategory;
-        renderPlaceList(window.HK_OFFLINE_PLACES.filter((p) => p.category === activeCategory));
+        renderPlaceList(offlineList.filter((p) => p.category === activeCategory));
       }
     }
 
@@ -1393,7 +1391,7 @@
 
       document.getElementById('route-metrics').textContent = '';
       const dirBtn = document.getElementById('directions-btn');
-      dirBtn.textContent = '🧭 Directions from My GPS';
+      dirBtn.textContent = '🧭 Directions from my location';
       dirBtn.disabled = false;
 
       document.getElementById('notes-tray-panel').classList.remove('open');
@@ -1466,23 +1464,64 @@
       }
     }
 
-    // Cantonese Voice Synthesizer (`zh-HK`)
+    // Cantonese Voice Synthesizer (`zh-HK`) — hardened for iOS Standalone PWA
+    let cachedVoices = [];
+    let audioCtx = null;
+    if ('speechSynthesis' in window) {
+      const loadVoices = () => {
+        cachedVoices = window.speechSynthesis.getVoices() || [];
+      };
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+
+    function unlockIosAudio() {
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        if (!audioCtx) audioCtx = new Ctx();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      } catch (_) {}
+    }
+
     function speakCantonese(text) {
+      if (!text) return;
       if (!('speechSynthesis' in window)) {
         alert('Speech synthesis is not supported in this browser.');
         return;
       }
-      window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(text);
-      const voices = window.speechSynthesis.getVoices();
+      unlockIosAudio();
+
+      const synth = window.speechSynthesis;
+      const voices = cachedVoices.length ? cachedVoices : synth.getVoices();
       const hkVoice =
         voices.find((v) => v.lang.toLowerCase() === 'zh-hk') ||
         voices.find((v) => v.lang.toLowerCase().includes('hk') || v.name.toLowerCase().includes('cantonese') || v.name.toLowerCase().includes('sin-ji')) ||
         voices.find((v) => v.lang.toLowerCase().startsWith('zh'));
-      if (hkVoice) utter.voice = hkVoice;
-      utter.lang = 'zh-HK';
-      utter.rate = 0.9;
-      window.speechSynthesis.speak(utter);
+
+      const doSpeak = (useVoiceObj) => {
+        const utter = new SpeechSynthesisUtterance(text);
+        if (useVoiceObj && hkVoice) utter.voice = hkVoice;
+        utter.lang = 'zh-HK';
+        utter.rate = 0.9;
+        utter.volume = 1.0;
+        utter.onerror = () => {
+          if (useVoiceObj && hkVoice) doSpeak(false);
+        };
+        // Keep global ref so iOS WebKit does not GC the utterance mid-speech
+        window.__activeUtterance = utter;
+        if (synth.paused) synth.resume();
+        synth.speak(utter);
+      };
+
+      // In iOS standalone PWA, calling cancel() unconditionally or calling speak()
+      // synchronously right after cancel() can silently drop the utterance.
+      if (synth.speaking || synth.pending) {
+        synth.cancel();
+        setTimeout(() => doSpeak(true), 60);
+      } else {
+        doSpeak(true);
+      }
     }
 
     function buildSpokenDestinationPhrase() {
@@ -1674,7 +1713,7 @@
         origin = await getCurrentGpsPosition();
       } catch (err) {
         btn.disabled = false;
-        btn.textContent = '🧭 Directions from My GPS';
+        btn.textContent = '🧭 Directions from my location';
         alert(err.message);
         return;
       }
@@ -1841,4 +1880,3 @@
   </script>
 </body>
 </html>
-

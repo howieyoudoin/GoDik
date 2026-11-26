@@ -1,0 +1,1844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GoDik" />
+  <meta name="theme-color" content="#090d16" />
+  <title>GoDik v1.3 — Bilingual Driver Card & CSDI Map</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <style>
+    :root {
+      --bg: #090d16;
+      --bg-card: #111827;
+      --bg-elevated: #1e293b;
+      --border: rgba(255, 255, 255, 0.11);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --taxi-red: #a8102a;
+      --taxi-red-soft: rgba(168, 16, 42, 0.16);
+      --taxi-green: #16a34a;
+      --taxi-green-soft: rgba(22, 163, 74, 0.16);
+      --taxi-blue: #0284c7;
+      --taxi-blue-soft: rgba(2, 132, 199, 0.16);
+      --amber: #facc15;
+      --csdi-teal: #14b8a6;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Noto Sans HK", "PingFang HK", "Heiti TC", sans-serif;
+      min-height: 100dvh;
+      overscroll-behavior-y: none;
+    }
+
+    .app-shell {
+      max-width: 520px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding-bottom: calc(env(safe-area-inset-bottom, 16px) + 24px);
+    }
+
+    /* Header */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(9, 13, 22, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: calc(env(safe-area-inset-top, 10px) + 8px) 16px 12px;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .taxi-roof-badge {
+      background: var(--taxi-red);
+      color: #fff;
+      font-weight: 900;
+      font-size: 13px;
+      padding: 6px 11px;
+      border-radius: 9px;
+      letter-spacing: 0.5px;
+      box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.85);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border: none;
+      cursor: pointer;
+    }
+    .taxi-roof-badge:active {
+      transform: scale(0.97);
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .icon-btn {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .icon-btn:active {
+      transform: scale(0.97);
+    }
+
+    /* Search Input */
+    .search-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 13px;
+      color: var(--muted);
+      font-size: 15px;
+      pointer-events: none;
+    }
+
+    #search-input {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1.5px solid rgba(255, 255, 255, 0.16);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 13px 38px 13px 38px;
+      font-size: 16px; /* Prevents iOS zoom on focus */
+      font-weight: 500;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    #search-input:focus {
+      border-color: var(--csdi-teal);
+      box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.2);
+    }
+    #search-input::placeholder {
+      color: #64748b;
+    }
+
+    .clear-btn {
+      position: absolute;
+      right: 10px;
+      background: rgba(148, 163, 184, 0.2);
+      border: none;
+      color: var(--text);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      font-size: 13px;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .clear-btn.visible {
+      display: flex;
+    }
+
+    /* Category Filter Pills */
+    .filter-scroll {
+      display: flex;
+      gap: 7px;
+      overflow-x: auto;
+      padding: 10px 16px 4px;
+      scrollbar-width: none;
+    }
+    .filter-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    .cat-pill {
+      flex-shrink: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .cat-pill.active {
+      background: var(--taxi-red);
+      border-color: var(--taxi-red);
+      color: #fff;
+    }
+
+    /* Main Content Container */
+    .content {
+      padding: 10px 16px;
+      flex: 1;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 8px 0 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--muted);
+    }
+
+    .source-tag {
+      font-size: 10.5px;
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      text-transform: none;
+    }
+    .source-csdi {
+      background: rgba(20, 184, 166, 0.16);
+      color: #2dd4bf;
+      border: 1px solid rgba(20, 184, 166, 0.35);
+    }
+    .source-als {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+    .source-curated {
+      background: rgba(250, 204, 21, 0.14);
+      color: #fde047;
+      border: 1px solid rgba(250, 204, 21, 0.3);
+    }
+
+    /* Place Result Cards */
+    .place-list {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .place-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      transition: transform 0.1s ease, border-color 0.15s ease;
+    }
+    .place-item:active {
+      transform: scale(0.985);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .place-main {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .place-top-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 3px;
+      flex-wrap: wrap;
+    }
+
+    .district-badge {
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.09);
+      color: #e2e8f0;
+      padding: 2px 7px;
+      border-radius: 5px;
+    }
+
+    .place-zh {
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+      line-height: 1.25;
+      margin-bottom: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .place-en {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #cbd5e1;
+      line-height: 1.3;
+    }
+
+    .place-street {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .fav-star-btn {
+      background: transparent;
+      border: none;
+      color: #475569;
+      font-size: 20px;
+      padding: 6px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .fav-star-btn.saved {
+      color: var(--amber);
+    }
+
+    /* Selected Destination Sheet / View */
+    #detail-view {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+    }
+    #detail-view.active {
+      display: flex;
+    }
+
+    .back-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* THE DRIVER FLASHCARD */
+    .driver-card {
+      background: linear-gradient(165deg, #ffffff 0%, #f1f5f9 100%);
+      color: #090d16;
+      border-radius: 20px;
+      padding: 18px 18px 16px;
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.48);
+      border: 3px solid var(--amber);
+      position: relative;
+    }
+    .driver-card.high-contrast-dark {
+      background: #000000;
+      color: #ffffff;
+      border-color: var(--amber);
+    }
+
+    .card-header-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .driver-polite-tag {
+      background: var(--taxi-red);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 8px;
+      letter-spacing: 0.5px;
+    }
+
+    .card-district-zh {
+      font-size: 22px;
+      font-weight: 900;
+      color: #e11d48;
+    }
+    .driver-card.high-contrast-dark .card-district-zh {
+      color: var(--amber);
+    }
+
+    .card-dest-zh {
+      font-size: clamp(30px, 8.2vw, 44px);
+      font-weight: 900;
+      line-height: 1.16;
+      letter-spacing: 0.5px;
+      margin: 6px 0 8px;
+      word-break: break-word;
+    }
+
+    .card-street-zh {
+      font-size: 20px;
+      font-weight: 700;
+      color: #334155;
+      margin-bottom: 10px;
+    }
+    .driver-card.high-contrast-dark .card-street-zh {
+      color: #cbd5e1;
+    }
+
+    /* Driver Instruction Chips rendered ON the flashcard */
+    .active-driver-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+      padding-top: 10px;
+      border-top: 1.5px dashed rgba(100, 116, 139, 0.35);
+    }
+    .active-driver-chips:empty {
+      display: none;
+    }
+
+    .oncard-chip {
+      background: #0f172a;
+      color: #facc15;
+      font-size: 17px;
+      font-weight: 900;
+      padding: 5px 11px;
+      border-radius: 9px;
+    }
+    .driver-card.high-contrast-dark .oncard-chip {
+      background: #facc15;
+      color: #000;
+    }
+
+    .card-en-sub {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(100, 116, 139, 0.22);
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+    }
+    .driver-card.high-contrast-dark .card-en-sub {
+      color: #94a3b8;
+    }
+
+    .jyutping-line {
+      margin-top: 4px;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #090d16;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .jyutping-loc {
+      color: #0284c7;
+      font-weight: 700;
+    }
+    .driver-card.high-contrast-dark .jyutping-line {
+      color: #f8fafc;
+    }
+    .driver-card.high-contrast-dark .jyutping-loc {
+      color: #38bdf8;
+    }
+
+    /* Primary Card Action Bar */
+    .card-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto auto auto;
+      gap: 6px;
+    }
+
+    .primary-btn {
+      background: var(--taxi-red);
+      color: #fff;
+      border: none;
+      border-radius: 13px;
+      padding: 12px 10px;
+      font-size: 13.5px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .primary-btn.secondary {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+    }
+    .primary-btn.secondary.tray-active {
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+    .primary-btn:active {
+      transform: scale(0.98);
+    }
+
+    /* Driver Toggles Panel (Tunnel, Payment, Drop-off) */
+    .panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .tray-panel {
+      display: none;
+    }
+    .tray-panel.open {
+      display: block;
+    }
+
+    .panel-title {
+      font-size: 12.5px;
+      font-weight: 800;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .chip-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-bottom: 10px;
+    }
+    .chip-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .mod-chip {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: #cbd5e1;
+      border-radius: 10px;
+      padding: 7px 10px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .mod-chip.selected {
+      background: rgba(250, 204, 21, 0.18);
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+
+    /* Official CSDI Map Container */
+    .map-actions-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .map-metrics {
+      font-size: 12px;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+    #mini-map {
+      width: 100%;
+      height: 240px;
+      border-radius: 13px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #0f172a;
+    }
+
+    /* FULLSCREEN SHOW-DRIVER MODAL */
+    #fullscreen-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: #000000;
+      color: #ffffff;
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: calc(env(safe-area-inset-top, 16px) + 12px) 20px calc(env(safe-area-inset-bottom, 16px) + 16px);
+    }
+    #fullscreen-modal.open {
+      display: flex;
+    }
+    #fullscreen-modal.light-card {
+      background: #ffffff;
+      color: #090d16;
+    }
+
+    .fs-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .fs-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px 0;
+    }
+
+    .fs-district {
+      font-size: clamp(24px, 6vw, 36px);
+      font-weight: 900;
+      color: var(--amber);
+    }
+    #fullscreen-modal.light-card .fs-district {
+      color: var(--taxi-red);
+    }
+
+    .fs-dest {
+      font-size: clamp(42px, 11vw, 76px);
+      font-weight: 900;
+      line-height: 1.12;
+      word-break: break-word;
+    }
+
+    .fs-street {
+      font-size: clamp(22px, 5vw, 34px);
+      font-weight: 700;
+      opacity: 0.86;
+    }
+
+    .fs-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .fs-chip {
+      background: var(--amber);
+      color: #000;
+      font-size: clamp(20px, 4.8vw, 30px);
+      font-weight: 900;
+      padding: 7px 15px;
+      border-radius: 12px;
+    }
+
+    .fs-bottom {
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+    }
+
+    /* Quick Phrase Bar Modal / Drawer */
+    .phrase-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .phrase-card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      cursor: pointer;
+    }
+    .phrase-card:active {
+      border-color: var(--amber);
+    }
+    .phrase-zh {
+      font-size: 16px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .phrase-en {
+      font-size: 11.5px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .phrase-jyutping {
+      font-size: 10.5px;
+      color: #38bdf8;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      margin-top: 3px;
+    }
+
+    .loader-inline {
+      font-size: 12px;
+      color: #2dd4bf;
+      display: none;
+      align-items: center;
+      gap: 6px;
+    }
+    .loader-inline.show {
+      display: inline-flex;
+    }
+
+    .empty-msg {
+      text-align: center;
+      padding: 28px 16px;
+      color: var(--muted);
+      font-size: 13.5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Sticky Top Header + Search -->
+    <header class="topbar">
+      <div class="brand-row">
+        <div class="brand">
+          <button type="button" class="taxi-roof-badge" id="brand-home-btn" title="Back to Homepage">GoDik 的士</button>
+        </div>
+        <div class="top-actions">
+          <button class="icon-btn" id="phrases-jump-btn" title="Jump to Instant Cantonese Taxi Phrases">
+            🗣️ Phrases
+          </button>
+        </div>
+      </div>
+
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input
+          type="search"
+          id="search-input"
+          placeholder="Search building, street, hotel, estate in EN / 中文..."
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+        />
+        <button class="clear-btn" id="clear-search-btn" aria-label="Clear search">✕</button>
+      </div>
+    </header>
+
+    <!-- Category Pills (Shown on Home / Search View) -->
+    <div class="filter-scroll" id="category-bar">
+      <button class="cat-pill active" data-cat="ALL">All Popular</button>
+      <button class="cat-pill" data-cat="SAVED">★ Saved</button>
+      <button class="cat-pill" data-cat="RECENT">🕘 Recent</button>
+      <button class="cat-pill" data-cat="Transport">✈️ Transport & Borders</button>
+      <button class="cat-pill" data-cat="Office / Mall">🏢 Offices & Malls</button>
+      <button class="cat-pill" data-cat="Nightlife & Culture">🍸 Nightlife & Arts</button>
+      <button class="cat-pill" data-cat="Hotel">🏨 Hotels</button>
+      <button class="cat-pill" data-cat="Attraction">🏖️ Beaches & Peaks</button>
+      <button class="cat-pill" data-cat="Hospital">🏥 Hospitals</button>
+    </div>
+
+    <main class="content">
+      <!-- LIST / SEARCH VIEW -->
+      <section id="list-view">
+        <div class="section-header">
+          <span id="results-heading">Popular Hong Kong Destinations</span>
+          <span class="loader-inline" id="csdi-loader">Searching HK CSDI…</span>
+        </div>
+        <div class="place-list" id="place-list"></div>
+
+        <!-- Quick Driver Phrases at Bottom of Home -->
+        <div class="panel" id="phrases-panel" style="margin-top: 18px;">
+          <div class="panel-title">
+            <span>🗣️ Instant Cantonese Taxi Phrases (Tap to Speak)</span>
+          </div>
+          <div class="phrase-grid" id="quick-phrases"></div>
+        </div>
+      </section>
+
+      <!-- SELECTED DESTINATION FLASHCARD & FARE VIEW -->
+      <section id="detail-view">
+        <div class="back-row">
+          <button class="icon-btn" id="back-btn">← Back to Search</button>
+          <div style="display:flex; gap:6px;">
+            <button class="icon-btn" id="contrast-toggle-btn" title="Switch White / OLED Black Card">🌗 Contrast</button>
+            <button class="icon-btn" id="detail-fav-btn">☆ Save</button>
+          </div>
+        </div>
+
+        <!-- Show-to-Driver Flashcard -->
+        <div class="driver-card" id="driver-card">
+          <div class="card-header-strip">
+            <span class="driver-polite-tag">司機唔該去 (Driver, please go to)</span>
+            <span class="card-district-zh" id="card-district-zh">中環</span>
+          </div>
+          <div class="card-dest-zh" id="card-dest-zh">國際金融中心二期</div>
+          <div class="card-street-zh" id="card-street-zh">金融街8號</div>
+          <div class="active-driver-chips" id="card-driver-chips"></div>
+          <div class="card-en-sub" id="card-en-sub">Two International Finance Centre • 8 Finance Street, Central</div>
+          <div class="jyutping-line" id="card-jyutping"></div>
+        </div>
+
+        <!-- Big Action Buttons -->
+        <div class="card-actions">
+          <button class="primary-btn" id="fullscreen-btn">
+            ⛶ Fullscreen
+          </button>
+          <button class="primary-btn secondary" id="speak-btn">
+            🔊 Speak Cantonese
+          </button>
+          <button class="primary-btn secondary" id="notes-tray-btn" title="Add Tunnel / Payment Note">
+            🛣️
+          </button>
+          <button class="primary-btn secondary" id="copy-btn" title="Copy Chinese Address">
+            📋
+          </button>
+          <button class="primary-btn secondary" id="gmaps-btn" title="Open in Google Maps (繁體中文)">
+            🗺️
+          </button>
+        </div>
+
+        <!-- One-Tap Driver Route & Payment Instructions (Collapsible Tray) -->
+        <div class="panel tray-panel" id="notes-tray-panel">
+          <div class="panel-title">
+            <span>🛣️ Add Tunnel / Payment Note to Card</span>
+            <span style="font-size:11px; font-weight:600; color:#64748b;">Tap to toggle</span>
+          </div>
+          <div class="chip-group" id="tunnel-chips">
+            <button class="mod-chip" data-group="tunnel" data-zh="行西隧" data-tunnel="WHC">行西隧 Western Tunnel</button>
+            <button class="mod-chip" data-group="tunnel" data-zh="行紅隧" data-tunnel="CHT">行紅隧 Cross-Harbour</button>
+            <button class="mod-chip" data-group="tunnel" data-zh="行東隧" data-tunnel="EHC">行東隧 Eastern Tunnel</button>
+            <button class="mod-chip" data-group="tunnel" data-zh="行最快路線" data-tunnel="AUTO">最快 Fastest Route</button>
+          </div>
+          <div class="chip-group" id="extra-chips">
+            <button class="mod-chip" data-zh="收唔收八達通？">💳 Octopus? (八達通)</button>
+            <button class="mod-chip" data-zh="收唔收 PayMe / 支付寶？">📱 PayMe / Alipay?</button>
+            <button class="mod-chip" data-zh="唔該要單">🧾 Receipt please (要單)</button>
+            <button class="mod-chip" data-zh="前面有落唔該">🛑 Drop off ahead (前面有落)</button>
+          </div>
+        </div>
+
+        <!-- Official HK LandsD / CSDI Bilingual Map Preview -->
+        <div class="panel">
+          <div class="panel-title">
+            <span>🗺️ Live Route & Official HK CSDI Map</span>
+            <span class="source-tag source-csdi">LandsD + OSRM</span>
+          </div>
+          <div class="map-actions-row">
+            <button class="icon-btn" id="directions-btn" style="background: var(--taxi-blue); border-color: transparent;">
+              🧭 Directions from My GPS
+            </button>
+            <span class="map-metrics" id="route-metrics"></span>
+          </div>
+          <div id="mini-map"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- FULLSCREEN DRIVER DISPLAY MODAL -->
+  <div id="fullscreen-modal">
+    <div class="fs-top">
+      <span class="driver-polite-tag" style="font-size:16px; padding:6px 12px;">司機唔該去 • Show to Driver</span>
+      <div style="display:flex; gap:8px;">
+        <button class="icon-btn" id="fs-theme-btn">🌗 Invert</button>
+        <button class="icon-btn" id="fs-close-btn">✕ Close</button>
+      </div>
+    </div>
+    <div class="fs-body">
+      <div class="fs-district" id="fs-district">中環</div>
+      <div class="fs-dest" id="fs-dest">國際金融中心二期</div>
+      <div class="fs-street" id="fs-street">金融街8號</div>
+      <div class="fs-chips" id="fs-chips"></div>
+    </div>
+    <div class="fs-bottom">
+      <button class="primary-btn" id="fs-speak-btn" style="flex:1; font-size:16px; padding:15px;">
+        🔊 廣東話發音 (Speak Cantonese)
+      </button>
+    </div>
+  </div>
+
+  <script src="places-hk.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script>
+    // =========================================================================
+    // 1. OFFICIAL HK80 GRID <-> WGS84 GEODETIC TRANSFORMATION (LandsD Formula)
+    //    Zero API latency, <1.5m precision across Hong Kong SAR
+    // =========================================================================
+    function hk80ToWgs84(easting, northing) {
+      const N0 = 819069.80;
+      const E0 = 836694.05;
+      const phi0 = 22.312133333333334 * Math.PI / 180;
+      const lam0 = 114.17855555555556 * Math.PI / 180;
+      const m0 = 1.0;
+      const M0 = 2468395.723;
+      const a = 6378388.0;
+      const f = 1.0 / 297.0;
+      const e2 = 2 * f - f * f;
+      const e4 = e2 * e2;
+      const e6 = e4 * e2;
+
+      const A0 = 1.0 - e2 / 4.0 - (3.0 * e4) / 64.0 - (5.0 * e6) / 256.0;
+      const A2 = (3.0 / 8.0) * (e2 + e4 / 4.0 + (15.0 * e6) / 128.0);
+      const A4 = (15.0 / 256.0) * (e4 + (3.0 * e6) / 4.0);
+
+      const dN = northing - N0;
+      const dE = easting - E0;
+      const Mp = M0 + dN / m0;
+
+      let phiP = Mp / (a * A0);
+      for (let i = 0; i < 6; i++) {
+        const mCalc = a * (A0 * phiP - A2 * Math.sin(2 * phiP) + A4 * Math.sin(4 * phiP));
+        phiP -= (mCalc - Mp) / (a * A0);
+      }
+
+      const sinP = Math.sin(phiP);
+      const cosP = Math.cos(phiP);
+      const tanP = Math.tan(phiP);
+      const nuP = a / Math.sqrt(1.0 - e2 * sinP * sinP);
+      const rhoP = (a * (1.0 - e2)) / Math.pow(1.0 - e2 * sinP * sinP, 1.5);
+      const psiP = nuP / rhoP;
+
+      const x = dE / (m0 * nuP);
+      const phiHk80 =
+        phiP -
+        (tanP / (m0 * rhoP)) * ((dE * x) / 2.0) +
+        (tanP / (m0 * rhoP)) *
+          ((dE * Math.pow(x, 3)) / 24.0) *
+          (-4.0 * psiP * psiP + 9.0 * psiP * (1.0 - tanP * tanP) + 12.0 * tanP * tanP);
+      const lamHk80 =
+        lam0 +
+        x / cosP -
+        (Math.pow(x, 3) / (6.0 * cosP)) * (psiP + 2.0 * tanP * tanP);
+
+      const lat = (phiHk80 * 180) / Math.PI - 5.5 / 3600.0;
+      const lng = (lamHk80 * 180) / Math.PI + 8.8 / 3600.0;
+      return { lat: +lat.toFixed(6), lng: +lng.toFixed(6) };
+    }
+
+    // Map HK's 18 broad District Council districts to specific taxi neighbourhoods
+    const HK_TAXI_AREAS = [
+      // HK Island
+      { lat: 22.2827, lng: 114.1917, zh: '天后', en: 'Tin Hau', r: 0.9 },
+      { lat: 22.2804, lng: 114.1846, zh: '銅鑼灣', en: 'Causeway Bay', r: 1.0 },
+      { lat: 22.2775, lng: 114.1925, zh: '大坑', en: 'Tai Hang', r: 0.8 },
+      { lat: 22.2700, lng: 114.1835, zh: '跑馬地', en: 'Happy Valley', r: 1.1 },
+      { lat: 22.2775, lng: 114.1731, zh: '灣仔', en: 'Wan Chai', r: 1.2 },
+      { lat: 22.2790, lng: 114.1655, zh: '金鐘', en: 'Admiralty', r: 0.8 },
+      { lat: 22.2820, lng: 114.1582, zh: '中環', en: 'Central', r: 1.0 },
+      { lat: 22.2770, lng: 114.1510, zh: '半山', en: 'Mid-Levels', r: 1.0 },
+      { lat: 22.2712, lng: 114.1498, zh: '山頂', en: 'The Peak', r: 1.2 },
+      { lat: 22.2867, lng: 114.1514, zh: '上環', en: 'Sheung Wan', r: 0.8 },
+      { lat: 22.2858, lng: 114.1425, zh: '西營盤', en: 'Sai Ying Pun', r: 0.8 },
+      { lat: 22.2865, lng: 114.1355, zh: '石塘咀', en: 'Shek Tong Tsui', r: 0.8 },
+      { lat: 22.2814, lng: 114.1286, zh: '堅尼地城', en: 'Kennedy Town', r: 1.1 },
+      { lat: 22.2885, lng: 114.1942, zh: '炮台山', en: 'Fortress Hill', r: 0.8 },
+      { lat: 22.2910, lng: 114.2005, zh: '北角', en: 'North Point', r: 1.0 },
+      { lat: 22.2878, lng: 114.2095, zh: '鰂魚涌', en: 'Quarry Bay', r: 1.0 },
+      { lat: 22.2848, lng: 114.2167, zh: '太古', en: 'Tai Koo', r: 0.9 },
+      { lat: 22.2820, lng: 114.2225, zh: '西灣河', en: 'Sai Wan Ho', r: 0.9 },
+      { lat: 22.2788, lng: 114.2286, zh: '筲箕灣', en: 'Shau Kei Wan', r: 1.1 },
+      { lat: 22.2644, lng: 114.2372, zh: '柴灣', en: 'Chai Wan', r: 1.5 },
+      { lat: 22.2480, lng: 114.1545, zh: '香港仔', en: 'Aberdeen', r: 1.2 },
+      { lat: 22.2481, lng: 114.1682, zh: '黃竹坑', en: 'Wong Chuk Hang', r: 1.2 },
+      { lat: 22.2367, lng: 114.1973, zh: '淺水灣', en: 'Repulse Bay', r: 1.5 },
+      { lat: 22.2186, lng: 114.2130, zh: '赤柱', en: 'Stanley', r: 1.8 },
+      { lat: 22.2430, lng: 114.1550, zh: '鴨脷洲', en: 'Ap Lei Chau', r: 1.2 },
+      { lat: 22.2614, lng: 114.1303, zh: '數碼港', en: 'Cyberport', r: 0.9 },
+      { lat: 22.2640, lng: 114.1340, zh: '薄扶林', en: 'Pok Fu Lam', r: 1.4 },
+      // Kowloon
+      { lat: 22.2976, lng: 114.1722, zh: '尖沙咀', en: 'Tsim Sha Tsui', r: 1.1 },
+      { lat: 22.3042, lng: 114.1615, zh: '西九龍', en: 'West Kowloon', r: 0.9 },
+      { lat: 22.3178, lng: 114.1602, zh: '奧運', en: 'Olympic', r: 0.7 },
+      { lat: 22.3049, lng: 114.1717, zh: '佐敦', en: 'Jordan', r: 0.8 },
+      { lat: 22.3130, lng: 114.1707, zh: '油麻地', en: 'Yau Ma Tei', r: 0.9 },
+      { lat: 22.3193, lng: 114.1694, zh: '旺角', en: 'Mong Kok', r: 0.9 },
+      { lat: 22.3215, lng: 114.1615, zh: '大角咀', en: 'Tai Kok Tsui', r: 0.9 },
+      { lat: 22.3245, lng: 114.1683, zh: '太子', en: 'Prince Edward', r: 0.8 },
+      { lat: 22.3320, lng: 114.1685, zh: '石硤尾', en: 'Shek Kip Mei', r: 0.9 },
+      { lat: 22.3307, lng: 114.1622, zh: '深水埗', en: 'Sham Shui Po', r: 1.0 },
+      { lat: 22.3355, lng: 114.1563, zh: '長沙灣', en: 'Cheung Sha Wan', r: 1.0 },
+      { lat: 22.3372, lng: 114.1483, zh: '荔枝角', en: 'Lai Chi Kok', r: 1.0 },
+      { lat: 22.3380, lng: 114.1376, zh: '美孚', en: 'Mei Foo', r: 1.0 },
+      { lat: 22.3033, lng: 114.1818, zh: '紅磡', en: 'Hung Hom', r: 1.2 },
+      { lat: 22.3125, lng: 114.1815, zh: '何文田', en: 'Ho Man Tin', r: 1.0 },
+      { lat: 22.3168, lng: 114.1885, zh: '土瓜灣', en: 'To Kwa Wan', r: 1.2 },
+      { lat: 22.3285, lng: 114.1895, zh: '九龍城', en: 'Kowloon City', r: 1.0 },
+      { lat: 22.3369, lng: 114.1762, zh: '九龍塘', en: 'Kowloon Tong', r: 1.3 },
+      { lat: 22.3380, lng: 114.1870, zh: '樂富', en: 'Lok Fu', r: 0.9 },
+      { lat: 22.3418, lng: 114.1939, zh: '黃大仙', en: 'Wong Tai Sin', r: 1.0 },
+      { lat: 22.3485, lng: 114.2015, zh: '慈雲山', en: 'Tsz Wan Shan', r: 1.1 },
+      { lat: 22.3358, lng: 114.1965, zh: '新蒲崗', en: 'San Po Kong', r: 0.9 },
+      { lat: 22.3305, lng: 114.1995, zh: '啟德', en: 'Kai Tak', r: 1.3 },
+      { lat: 22.3348, lng: 114.2089, zh: '彩虹', en: 'Choi Hung', r: 1.0 },
+      { lat: 22.3233, lng: 114.2140, zh: '九龍灣', en: 'Kowloon Bay', r: 1.2 },
+      { lat: 22.3156, lng: 114.2191, zh: '牛頭角', en: 'Ngau Tau Kok', r: 0.9 },
+      { lat: 22.3122, lng: 114.2266, zh: '觀塘', en: 'Kwun Tong', r: 1.1 },
+      { lat: 22.3205, lng: 114.2325, zh: '秀茂坪', en: 'Sau Mau Ping', r: 1.1 },
+      { lat: 22.3068, lng: 114.2333, zh: '藍田', en: 'Lam Tin', r: 1.2 },
+      { lat: 22.2977, lng: 114.2372, zh: '油塘', en: 'Yau Tong', r: 1.2 },
+      { lat: 22.2918, lng: 114.2395, zh: '鯉魚門', en: 'Lei Yue Mun', r: 0.9 },
+      { lat: 22.3400, lng: 114.2017, zh: '鑽石山', en: 'Diamond Hill', r: 1.1 },
+      // NT & Lantau
+      { lat: 22.3156, lng: 113.9362, zh: '赤鱲角機場', en: 'HK Airport', r: 2.5 },
+      { lat: 22.2892, lng: 113.9412, zh: '東涌', en: 'Tung Chung', r: 2.0 },
+      { lat: 22.2975, lng: 114.0155, zh: '愉景灣', en: 'Discovery Bay', r: 2.0 },
+      { lat: 22.3737, lng: 114.1178, zh: '荃灣', en: 'Tsuen Wan', r: 2.0 },
+      { lat: 22.3686, lng: 114.1097, zh: '荃灣西', en: 'Tsuen Wan West', r: 1.0 },
+      { lat: 22.3672, lng: 114.0608, zh: '深井', en: 'Sham Tseng', r: 1.8 },
+      { lat: 22.3570, lng: 114.1279, zh: '葵芳', en: 'Kwai Fong', r: 1.5 },
+      { lat: 22.3585, lng: 114.1068, zh: '青衣', en: 'Tsing Yi', r: 2.0 },
+      { lat: 22.3826, lng: 114.1873, zh: '沙田', en: 'Sha Tin', r: 2.0 },
+      { lat: 22.3953, lng: 114.1983, zh: '火炭', en: 'Fo Tan', r: 1.5 },
+      { lat: 22.4245, lng: 114.2315, zh: '馬鞍山', en: 'Ma On Shan', r: 2.0 },
+      { lat: 22.3729, lng: 114.1786, zh: '大圍', en: 'Tai Wai', r: 1.5 },
+      { lat: 22.4445, lng: 114.1705, zh: '大埔', en: 'Tai Po', r: 2.5 },
+      { lat: 22.4921, lng: 114.1387, zh: '粉嶺', en: 'Fanling', r: 2.5 },
+      { lat: 22.5011, lng: 114.1280, zh: '上水', en: 'Sheung Shui', r: 2.5 },
+      { lat: 22.3953, lng: 113.9732, zh: '屯門', en: 'Tuen Mun', r: 2.5 },
+      { lat: 22.4455, lng: 114.0352, zh: '元朗', en: 'Yuen Long', r: 2.5 },
+      { lat: 22.4480, lng: 114.0020, zh: '天水圍', en: 'Tin Shui Wai', r: 2.5 },
+      { lat: 22.3075, lng: 114.2598, zh: '將軍澳', en: 'Tseung Kwan O', r: 2.2 },
+      { lat: 22.3818, lng: 114.2732, zh: '西貢', en: 'Sai Kung', r: 2.5 }
+    ];
+
+    function resolveTaxiArea(lat, lng, fallbackEn = 'Hong Kong', fallbackZh = '香港') {
+      let best = null;
+      let bestDist = Infinity;
+      for (const area of HK_TAXI_AREAS) {
+        const d = haversineKm(lat, lng, area.lat, area.lng);
+        if (d <= area.r && d < bestDist) {
+          best = area;
+          bestDist = d;
+        }
+      }
+      if (best) return { districtEn: best.en, districtZh: best.zh };
+      return {
+        districtEn: fallbackEn.replace(/ District$/i, '').trim() || 'Hong Kong',
+        districtZh: fallbackZh.replace(/區$/, '').trim() || '香港'
+      };
+    }
+
+    // Infer HK Region (HK Island / Kowloon / NT / Lantau) for taxi color & harbour crossing rules
+    function inferRegion(districtEn = '', districtZh = '', lat = 22.28, lng = 114.16) {
+      const d = `${districtEn} ${districtZh}`.toLowerCase();
+      if (d.includes('islands') || d.includes('離島') || d.includes('lantau') || d.includes('大嶼山') || d.includes('赤鱲角') || (lng < 114.06 && lat < 22.36)) {
+        return 'LANTAU';
+      }
+      if (
+        d.includes('central') || d.includes('wan chai') || d.includes('eastern') || d.includes('southern') ||
+        d.includes('中西區') || d.includes('灣仔') || d.includes('東區') || d.includes('南區')
+      ) {
+        return 'HK';
+      }
+      if (
+        d.includes('yau tsim mong') || d.includes('sham shui po') || d.includes('kowloon city') ||
+        d.includes('wong tai sin') || d.includes('kwun tong') ||
+        d.includes('油尖旺') || d.includes('深水埗') || d.includes('九龍城') || d.includes('黃大仙') || d.includes('觀塘')
+      ) {
+        return 'KLN';
+      }
+      return 'NT';
+    }
+
+    // =========================================================================
+    // 2. STATE, STORAGE & JYUTPING OPTIONAL MODULE
+    // =========================================================================
+    const STORAGE_FAVS = 'taketaxi_hk_favs_v1';
+    const STORAGE_RECENT = 'taketaxi_hk_recent_v1';
+
+    let savedIds = JSON.parse(localStorage.getItem(STORAGE_FAVS) || '[]');
+    let savedPlacesMap = JSON.parse(localStorage.getItem(STORAGE_FAVS + '_obj') || '{}');
+    let recentPlaces = JSON.parse(localStorage.getItem(STORAGE_RECENT) || '[]');
+
+    let activeCategory = 'ALL';
+    let selectedPlace = null;
+    let selectedTunnel = null; // 'WHC' | 'CHT' | 'EHC' | 'AUTO' | null
+    let selectedExtraNotes = new Set();
+    let userGps = null;
+    let searchAbortCtrl = null;
+    let toJyutpingFn = null;
+
+    // Lazy-load open-source Cantonese Jyutping romanizer (graceful offline fallback)
+    import('https://cdn.jsdelivr.net/npm/to-jyutping@3.1.1/+esm')
+      .then((mod) => {
+        toJyutpingFn = mod.getJyutpingText || (mod.default && mod.default.getJyutpingText);
+        if (selectedPlace) updateJyutpingDisplay();
+      })
+      .catch(() => {});
+
+    const QUICK_PHRASES = [
+      { zh: '唔該，前面轉左', jyutping: 'm4 goi1, cin4 min6 zyun3 zo2', en: 'Turn left ahead, please' },
+      { zh: '唔該，前面轉右', jyutping: 'm4 goi1, cin4 min6 zyun3 jau6', en: 'Turn right ahead, please' },
+      { zh: '唔該，前面有落', jyutping: 'm4 goi1, cin4 min6 jau5 lok6', en: 'Drop off just ahead, please' },
+      { zh: '唔該要張單', jyutping: 'm4 goi1 jiu3 zoeng1 daan1', en: 'Receipt please' },
+      { zh: '唔該，左邊有落', jyutping: 'm4 goi1, zo2 bin1 jau5 lok6', en: 'Drop off on the left side, please' },
+      { zh: '唔該，右邊有落', jyutping: 'm4 goi1, jau6 bin1 jau5 lok6', en: 'Drop off on the right side, please' },
+      { zh: '收唔收八達通？', jyutping: 'sau1 m4 sau1 baat3 daat6 tung1?', en: 'Do you take Octopus?' },
+      { zh: '唔該，前面直行', jyutping: 'm4 goi1, cin4 min6 zik6 hang4', en: 'Go straight ahead, please' },
+      { zh: '唔該開尾箱擺行李', jyutping: 'm4 goi1 hoi1 mei5 soeng1 baai2 hang4 lei5', en: 'Open the boot for luggage, please' },
+      { zh: '唔使找，唔該晒！', jyutping: 'm4 sai2 zaau2, m4 goi1 saai3!', en: 'Keep the change, thank you!' }
+    ];
+
+    // =========================================================================
+    // 3. LIVE HONG KONG CSDI (LocationSearch) + ALS + OFFLINE SEARCH ENGINE
+    // =========================================================================
+    const NOISE_PREFIXES = [
+      'registered wifi access points',
+      'wi-fi.hk hotspot',
+      'automated external defibrillators',
+      'aed -',
+      '已登記的wifi',
+      'wi-fi.hk 熱點',
+      '自動心臟除顫器'
+    ];
+
+    function isNoiseFacility(nameEn = '', nameZh = '') {
+      const s = `${nameEn} ${nameZh}`.toLowerCase();
+      return NOISE_PREFIXES.some((prefix) => s.includes(prefix));
+    }
+
+    async function queryHkCsdiLocationSearch(query, signal) {
+      const url = `https://www.map.gov.hk/gs/api/v1.0.0/locationSearch?q=${encodeURIComponent(query)}`;
+      const res = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal
+      });
+      if (!res.ok) throw new Error('CSDI HTTP ' + res.status);
+      const items = await res.json();
+      if (!Array.isArray(items)) return [];
+
+      const seen = new Set();
+      const cleaned = [];
+
+      for (const item of items) {
+        const nameEn = (item.nameEN || '').trim();
+        const nameZh = (item.nameZH || '').trim();
+        if (!nameZh && !nameEn) continue;
+        if (isNoiseFacility(nameEn, nameZh)) continue;
+
+        const addressZh = (item.addressZH || '').replace(/\s+/g, ' ').trim();
+        const addressEn = (item.addressEN || '').replace(/\s+/g, ' ').trim();
+        const districtZh = (item.districtZH || '').trim();
+        const districtEn = (item.districtEN || '').replace(/ District$/i, '').trim();
+
+        const dedupeKey = `${nameZh}|${addressZh}|${districtZh}`;
+        if (seen.has(dedupeKey)) continue;
+        seen.add(dedupeKey);
+
+        const coords = hk80ToWgs84(Number(item.x), Number(item.y));
+        const area = resolveTaxiArea(coords.lat, coords.lng, districtEn, districtZh);
+        cleaned.push({
+          id: `csdi_${Math.round(item.x)}_${Math.round(item.y)}_${cleaned.length}`,
+          source: 'CSDI',
+          nameEn: nameEn || addressEn,
+          nameZh: nameZh || addressZh,
+          driverZh: nameZh || addressZh,
+          streetEn: addressEn,
+          streetZh: addressZh,
+          districtEn: area.districtEn,
+          districtZh: area.districtZh,
+          region: inferRegion(districtEn, districtZh, coords.lat, coords.lng),
+          lat: coords.lat,
+          lng: coords.lng
+        });
+
+        if (cleaned.length >= 18) break;
+      }
+      return cleaned;
+    }
+
+    async function queryGovHkAlsFallback(query, signal) {
+      const url = `https://www.als.gov.hk/lookup?q=${encodeURIComponent(query)}&n=8`;
+      const res = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      const list = data.SuggestedAddress || [];
+      return list.map((entry, idx) => {
+        const p = (entry.Address && entry.Address.PremisesAddress) || {};
+        const eng = p.EngPremisesAddress || {};
+        const chi = p.ChiPremisesAddress || {};
+        const geo = p.GeospatialInformation || {};
+
+        const bldgEn = eng.BuildingName || (eng.EngEstate && eng.EngEstate.EstateName) || '';
+        const bldgZh = chi.BuildingName || (chi.ChiEstate && chi.ChiEstate.EstateName) || '';
+        const stEn = eng.EngStreet
+          ? `${eng.EngStreet.BuildingNoFrom || ''} ${eng.EngStreet.StreetName || ''}`.trim()
+          : '';
+        const stZh = chi.ChiStreet
+          ? `${chi.ChiStreet.StreetName || ''}${chi.ChiStreet.BuildingNoFrom ? chi.ChiStreet.BuildingNoFrom + '號' : ''}`
+          : '';
+        const distEn = (eng.EngDistrict && eng.EngDistrict.DcDistrict) || '';
+        const distZh = (chi.ChiDistrict && chi.ChiDistrict.DcDistrict) || '';
+        const lat = parseFloat(geo.Latitude) || 22.2848;
+        const lng = parseFloat(geo.Longitude) || 114.158;
+
+        const area = resolveTaxiArea(lat, lng, distEn, distZh);
+        return {
+          id: `als_${p.GeoAddress || idx}`,
+          source: 'ALS',
+          nameEn: bldgEn || stEn || query,
+          nameZh: bldgZh || stZh,
+          driverZh: bldgZh || stZh,
+          streetEn: stEn,
+          streetZh: stZh,
+          districtEn: area.districtEn,
+          districtZh: area.districtZh,
+          region: inferRegion(distEn, distZh, lat, lng),
+          lat,
+          lng
+        };
+      });
+    }
+
+    function searchOfflineCurated(query) {
+      const q = query.trim().toLowerCase();
+      if (!q) return window.HK_OFFLINE_PLACES;
+      return window.HK_OFFLINE_PLACES.filter((p) => {
+        const hay = `${p.nameEn} ${p.nameZh} ${p.driverZh} ${p.streetEn} ${p.streetZh} ${p.districtEn} ${p.districtZh} ${p.keywords || ''}`.toLowerCase();
+        return q.split(/\s+/).every((tok) => hay.includes(tok));
+      });
+    }
+
+    // =========================================================================
+    // 4. UI RENDERING — PLACE LIST & SEARCH
+    // =========================================================================
+    const searchInput = document.getElementById('search-input');
+    const clearBtn = document.getElementById('clear-search-btn');
+    const placeListEl = document.getElementById('place-list');
+    const resultsHeading = document.getElementById('results-heading');
+    const csdiLoader = document.getElementById('csdi-loader');
+
+    function renderPlaceList(places, emptyText = 'No matching Hong Kong locations found.') {
+      if (!places || places.length === 0) {
+        placeListEl.innerHTML = `<div class="empty-msg">${emptyText}</div>`;
+        return;
+      }
+
+      placeListEl.innerHTML = places
+        .map((p) => {
+          const isSaved = savedIds.includes(p.id);
+          let badgeHtml = '';
+          if (p.source === 'CSDI') {
+            badgeHtml = `<span class="source-tag source-csdi">HK CSDI</span>`;
+          } else if (p.source === 'ALS') {
+            badgeHtml = `<span class="source-tag source-als">GovHK ALS</span>`;
+          }
+
+          return `
+            <div class="place-item" data-id="${escapeAttr(p.id)}">
+              <div class="place-main">
+                <div class="place-top-meta">
+                  <span class="district-badge">${escapeHtml(p.districtZh)} • ${escapeHtml(p.districtEn)}</span>
+                  ${badgeHtml}
+                </div>
+                <div class="place-zh">${escapeHtml(p.driverZh || p.nameZh)}</div>
+                <div class="place-en">${escapeHtml(p.nameEn)}</div>
+                ${p.streetZh || p.streetEn ? `<div class="place-street">${escapeHtml(p.streetZh)} ${p.streetEn ? '• ' + escapeHtml(p.streetEn) : ''}</div>` : ''}
+              </div>
+              <button class="fav-star-btn ${isSaved ? 'saved' : ''}" data-fav-id="${escapeAttr(p.id)}" title="Save favorite">
+                ${isSaved ? '★' : '☆'}
+              </button>
+            </div>
+          `;
+        })
+        .join('');
+
+      // Attach click handlers
+      placeListEl.querySelectorAll('.place-item').forEach((row, idx) => {
+        const placeObj = places[idx];
+        row.addEventListener('click', (e) => {
+          if (e.target.closest('.fav-star-btn')) {
+            e.stopPropagation();
+            toggleFavorite(placeObj);
+            renderCurrentView();
+            return;
+          }
+          openPlaceDetail(placeObj);
+        });
+      });
+    }
+
+    let debounceTimer = null;
+    searchInput.addEventListener('input', () => {
+      const q = searchInput.value.trim();
+      clearBtn.classList.toggle('visible', q.length > 0);
+      clearTimeout(debounceTimer);
+
+      if (!q) {
+        if (searchAbortCtrl) searchAbortCtrl.abort();
+        csdiLoader.classList.remove('show');
+        renderCurrentView();
+        return;
+      }
+
+      // Show Detail -> List if user types while viewing a card
+      closePlaceDetail(false);
+
+      // 1) Instant 0ms offline curated matches
+      const localHits = searchOfflineCurated(q);
+      resultsHeading.textContent = `Results for "${q}"`;
+      renderPlaceList(localHits, 'Searching HK CSDI LocationSearch…');
+
+      // 2) Live HK CSDI LocationSearch API (debounced 220ms)
+      debounceTimer = setTimeout(async () => {
+        if (searchAbortCtrl) searchAbortCtrl.abort();
+        searchAbortCtrl = new AbortController();
+        csdiLoader.classList.add('show');
+
+        try {
+          const csdiResults = await queryHkCsdiLocationSearch(q, searchAbortCtrl.signal);
+          let combined = [...localHits, ...csdiResults];
+
+          // Fallback to GovHK ALS if CSDI returned very few hits (e.g. specific street number formatting)
+          if (csdiResults.length < 2) {
+            const alsResults = await queryGovHkAlsFallback(q, searchAbortCtrl.signal).catch(() => []);
+            combined = [...combined, ...alsResults];
+          }
+
+          csdiLoader.classList.remove('show');
+          renderPlaceList(combined);
+        } catch (err) {
+          if (err.name === 'AbortError') return;
+          csdiLoader.classList.remove('show');
+          // Try ALS backup or stay on offline curated
+          try {
+            const alsBackup = await queryGovHkAlsFallback(q, searchAbortCtrl.signal);
+            renderPlaceList([...localHits, ...alsBackup]);
+          } catch (_) {
+            renderPlaceList(localHits, 'Offline mode — showing matching built-in HK landmarks.');
+          }
+        }
+      }, 220);
+    });
+
+    clearBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      clearBtn.classList.remove('visible');
+      csdiLoader.classList.remove('show');
+      renderCurrentView();
+      searchInput.focus();
+    });
+
+    // Category filter tabs
+    document.getElementById('category-bar').addEventListener('click', (e) => {
+      const btn = e.target.closest('.cat-pill');
+      if (!btn) return;
+      document.querySelectorAll('.cat-pill').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeCategory = btn.dataset.cat;
+      searchInput.value = '';
+      clearBtn.classList.remove('visible');
+      closePlaceDetail(false);
+      renderCurrentView();
+    });
+
+    function renderCurrentView() {
+      if (activeCategory === 'SAVED') {
+        resultsHeading.textContent = '★ Saved Destinations';
+        const list = savedIds.map((id) => savedPlacesMap[id] || window.HK_OFFLINE_PLACES.find((p) => p.id === id)).filter(Boolean);
+        renderPlaceList(list, 'Tap ☆ on any building or address to save it offline here.');
+      } else if (activeCategory === 'RECENT') {
+        resultsHeading.textContent = '🕘 Recently Viewed';
+        renderPlaceList(recentPlaces, 'Your recently opened taxi flashcards will appear here.');
+      } else if (activeCategory === 'ALL') {
+        resultsHeading.textContent = 'Popular Hong Kong Destinations';
+        renderPlaceList(window.HK_OFFLINE_PLACES);
+      } else {
+        resultsHeading.textContent = activeCategory;
+        renderPlaceList(window.HK_OFFLINE_PLACES.filter((p) => p.category === activeCategory));
+      }
+    }
+
+    // =========================================================================
+    // 5. DIRECT JUMP TO INSTANT CANTONESE TAXI PHRASES
+    // =========================================================================
+    document.getElementById('phrases-jump-btn').addEventListener('click', () => {
+      if (document.getElementById('detail-view').classList.contains('active')) {
+        closePlaceDetail(true);
+      }
+      const panel = document.getElementById('phrases-panel');
+      if (panel) {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+
+    // =========================================================================
+    // 6. FLASHCARD DETAIL, CANTONESE TTS, GOOGLE MAPS & TUNNEL CHIPS
+    // =========================================================================
+    let leafletMap = null;
+    let routeLayer = null;
+    let markersLayer = null;
+
+    function openPlaceDetail(place) {
+      selectedPlace = place;
+
+      // Save to Recent
+      recentPlaces = [place, ...recentPlaces.filter((r) => r.id !== place.id)].slice(0, 15);
+      localStorage.setItem(STORAGE_RECENT, JSON.stringify(recentPlaces));
+
+      document.getElementById('list-view').style.display = 'none';
+      document.getElementById('category-bar').style.display = 'none';
+      document.getElementById('detail-view').classList.add('active');
+
+      document.getElementById('route-metrics').textContent = '';
+      const dirBtn = document.getElementById('directions-btn');
+      dirBtn.textContent = '🧭 Directions from My GPS';
+      dirBtn.disabled = false;
+
+      document.getElementById('notes-tray-panel').classList.remove('open');
+      updateNotesTrayBtnState();
+
+      renderDriverCard();
+      updateFavButtonState();
+      initOrUpdateMap();
+      showDestinationOnMap(place);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function closePlaceDetail(restoreList = true) {
+      document.getElementById('detail-view').classList.remove('active');
+      document.getElementById('list-view').style.display = 'block';
+      document.getElementById('category-bar').style.display = 'flex';
+      if (restoreList) renderCurrentView();
+    }
+
+    document.getElementById('back-btn').addEventListener('click', () => closePlaceDetail(true));
+
+    function renderDriverCard() {
+      if (!selectedPlace) return;
+      const destText = selectedPlace.driverZh || selectedPlace.nameZh;
+      document.getElementById('card-district-zh').textContent = selectedPlace.districtZh || '香港';
+      document.getElementById('card-dest-zh').textContent = destText;
+      document.getElementById('card-street-zh').textContent = selectedPlace.streetZh || '';
+      document.getElementById('card-en-sub').textContent =
+        `${selectedPlace.nameEn}` +
+        (selectedPlace.streetEn ? ` • ${selectedPlace.streetEn}` : '') +
+        (selectedPlace.districtEn ? ` (${selectedPlace.districtEn})` : '');
+
+      // Render active driver chips onto both normal & fullscreen cards
+      const chipsArr = [];
+      if (selectedTunnel) {
+        const btn = document.querySelector(`#tunnel-chips .mod-chip[data-tunnel="${selectedTunnel}"]`);
+        if (btn) chipsArr.push(btn.dataset.zh);
+      }
+      selectedExtraNotes.forEach((zh) => chipsArr.push(zh));
+
+      const chipsHtml = chipsArr.map((c) => `<span class="oncard-chip">${escapeHtml(c)}</span>`).join('');
+      document.getElementById('card-driver-chips').innerHTML = chipsHtml;
+
+      // Sync Fullscreen Modal
+      document.getElementById('fs-district').textContent = selectedPlace.districtZh || '香港';
+      document.getElementById('fs-dest').textContent = destText;
+      document.getElementById('fs-street').textContent = selectedPlace.streetZh || '';
+      document.getElementById('fs-chips').innerHTML = chipsArr
+        .map((c) => `<span class="fs-chip">${escapeHtml(c)}</span>`)
+        .join('');
+
+      updateJyutpingDisplay();
+    }
+
+    function updateJyutpingDisplay() {
+      const el = document.getElementById('card-jyutping');
+      if (!selectedPlace || !toJyutpingFn) {
+        el.textContent = '';
+        return;
+      }
+      const destZh = selectedPlace.driverZh || selectedPlace.nameZh;
+      try {
+        const prefixJyutping = toJyutpingFn('唔該去');
+        const destJyutping = toJyutpingFn(destZh);
+        el.innerHTML =
+          `🗣️ Cantonese: "唔該去 <span class="jyutping-loc">${escapeHtml(destZh)}</span>" → ` +
+          `${escapeHtml(prefixJyutping)} <span class="jyutping-loc">${escapeHtml(destJyutping)}</span>`;
+      } catch (_) {
+        el.textContent = '';
+      }
+    }
+
+    // Cantonese Voice Synthesizer (`zh-HK`)
+    function speakCantonese(text) {
+      if (!('speechSynthesis' in window)) {
+        alert('Speech synthesis is not supported in this browser.');
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      const voices = window.speechSynthesis.getVoices();
+      const hkVoice =
+        voices.find((v) => v.lang.toLowerCase() === 'zh-hk') ||
+        voices.find((v) => v.lang.toLowerCase().includes('hk') || v.name.toLowerCase().includes('cantonese') || v.name.toLowerCase().includes('sin-ji')) ||
+        voices.find((v) => v.lang.toLowerCase().startsWith('zh'));
+      if (hkVoice) utter.voice = hkVoice;
+      utter.lang = 'zh-HK';
+      utter.rate = 0.9;
+      window.speechSynthesis.speak(utter);
+    }
+
+    function buildSpokenDestinationPhrase() {
+      if (!selectedPlace) return '';
+      let parts = [`司機唔該去，${selectedPlace.districtZh || ''}，${selectedPlace.driverZh || selectedPlace.nameZh}`];
+      if (selectedPlace.streetZh && !(selectedPlace.driverZh || '').includes(selectedPlace.streetZh)) {
+        parts.push(selectedPlace.streetZh);
+      }
+      if (selectedTunnel) {
+        const btn = document.querySelector(`#tunnel-chips .mod-chip[data-tunnel="${selectedTunnel}"]`);
+        if (btn) parts.push(btn.dataset.zh);
+      }
+      selectedExtraNotes.forEach((zh) => parts.push(zh));
+      return parts.join('，');
+    }
+
+    document.getElementById('speak-btn').addEventListener('click', () => speakCantonese(buildSpokenDestinationPhrase()));
+    document.getElementById('fs-speak-btn').addEventListener('click', () => speakCantonese(buildSpokenDestinationPhrase()));
+
+    // Copy Chinese Address
+    document.getElementById('copy-btn').addEventListener('click', async () => {
+      if (!selectedPlace) return;
+      const txt = `${selectedPlace.districtZh} ${selectedPlace.driverZh || selectedPlace.nameZh} ${selectedPlace.streetZh || ''}`.trim();
+      try {
+        await navigator.clipboard.writeText(txt);
+        const btn = document.getElementById('copy-btn');
+        btn.textContent = '✅';
+        setTimeout(() => (btn.textContent = '📋'), 1400);
+      } catch (_) {}
+    });
+
+    // Open Searched Location in Google Maps (Traditional Chinese)
+    document.getElementById('gmaps-btn').addEventListener('click', () => {
+      if (!selectedPlace) return;
+      const zhName = selectedPlace.nameZh || selectedPlace.driverZh || '';
+      const zhStreet = selectedPlace.streetZh || '';
+      const zhDistrict = selectedPlace.districtZh || '';
+      const query = [zhName, zhStreet, zhDistrict, '香港'].filter(Boolean).join(' ').trim();
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}&hl=zh-HK`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    });
+
+    // Contrast & Fullscreen Modal Toggles
+    document.getElementById('contrast-toggle-btn').addEventListener('click', () => {
+      document.getElementById('driver-card').classList.toggle('high-contrast-dark');
+    });
+
+    const fsModal = document.getElementById('fullscreen-modal');
+    document.getElementById('fullscreen-btn').addEventListener('click', () => fsModal.classList.add('open'));
+    document.getElementById('fs-close-btn').addEventListener('click', () => fsModal.classList.remove('open'));
+    document.getElementById('fs-theme-btn').addEventListener('click', () => fsModal.classList.toggle('light-card'));
+
+    // Tunnel & Note Modifier Tray Toggle & Chips
+    function updateNotesTrayBtnState() {
+      const trayOpen = document.getElementById('notes-tray-panel').classList.contains('open');
+      const hasNotes = Boolean(selectedTunnel) || selectedExtraNotes.size > 0;
+      document.getElementById('notes-tray-btn').classList.toggle('tray-active', trayOpen || hasNotes);
+    }
+
+    document.getElementById('notes-tray-btn').addEventListener('click', () => {
+      document.getElementById('notes-tray-panel').classList.toggle('open');
+      updateNotesTrayBtnState();
+    });
+
+    document.getElementById('tunnel-chips').addEventListener('click', (e) => {
+      const chip = e.target.closest('.mod-chip');
+      if (!chip) return;
+      const tunnelCode = chip.dataset.tunnel;
+      if (selectedTunnel === tunnelCode) {
+        selectedTunnel = null;
+        chip.classList.remove('selected');
+      } else {
+        document.querySelectorAll('#tunnel-chips .mod-chip').forEach((c) => c.classList.remove('selected'));
+        selectedTunnel = tunnelCode;
+        chip.classList.add('selected');
+      }
+      renderDriverCard();
+      updateNotesTrayBtnState();
+    });
+
+    document.getElementById('extra-chips').addEventListener('click', (e) => {
+      const chip = e.target.closest('.mod-chip');
+      if (!chip) return;
+      const zh = chip.dataset.zh;
+      if (selectedExtraNotes.has(zh)) {
+        selectedExtraNotes.delete(zh);
+        chip.classList.remove('selected');
+      } else {
+        selectedExtraNotes.add(zh);
+        chip.classList.add('selected');
+      }
+      renderDriverCard();
+      updateNotesTrayBtnState();
+    });
+
+    // Favorites
+    function toggleFavorite(place) {
+      if (!place) return;
+      const idx = savedIds.indexOf(place.id);
+      if (idx >= 0) {
+        savedIds.splice(idx, 1);
+        delete savedPlacesMap[place.id];
+      } else {
+        savedIds.unshift(place.id);
+        savedPlacesMap[place.id] = place;
+      }
+      localStorage.setItem(STORAGE_FAVS, JSON.stringify(savedIds));
+      localStorage.setItem(STORAGE_FAVS + '_obj', JSON.stringify(savedPlacesMap));
+      updateFavButtonState();
+    }
+
+    function updateFavButtonState() {
+      if (!selectedPlace) return;
+      const isSaved = savedIds.includes(selectedPlace.id);
+      const btn = document.getElementById('detail-fav-btn');
+      btn.textContent = isSaved ? '★ Saved' : '☆ Save';
+      btn.style.color = isSaved ? '#facc15' : '';
+    }
+
+    document.getElementById('detail-fav-btn').addEventListener('click', () => {
+      toggleFavorite(selectedPlace);
+    });
+
+    // Quick Cantonese Phrases
+    document.getElementById('quick-phrases').innerHTML = QUICK_PHRASES.map(
+      (p, i) => `
+      <div class="phrase-card" data-phrase-idx="${i}">
+        <div class="phrase-zh">🔊 ${escapeHtml(p.zh)}</div>
+        <div class="phrase-en">${escapeHtml(p.en)}</div>
+        <div class="phrase-jyutping">${escapeHtml(p.jyutping)}</div>
+      </div>
+    `
+    ).join('');
+
+    document.getElementById('quick-phrases').addEventListener('click', (e) => {
+      const card = e.target.closest('.phrase-card');
+      if (!card) return;
+      const p = QUICK_PHRASES[Number(card.dataset.phraseIdx)];
+      if (p) speakCantonese(p.zh);
+    });
+
+    // =========================================================================
+    // 7. ON-DEMAND GPS DIRECTIONS & OSRM ROUTING
+    // =========================================================================
+    function haversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = ((lat2 - lat1) * Math.PI) / 180;
+      const dLon = ((lon2 - lon1) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    }
+
+    function getCurrentGpsPosition() {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('Geolocation is not supported by your browser.'));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            userGps = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            resolve({
+              lat: userGps.lat,
+              lng: userGps.lng,
+              region: inferRegion('', '', userGps.lat, userGps.lng)
+            });
+          },
+          () => {
+            reject(new Error('Please allow location access to get directions from your current GPS position.'));
+          },
+          { enableHighAccuracy: true, timeout: 8000 }
+        );
+      });
+    }
+
+    async function routeFromUserGps() {
+      if (!selectedPlace) return;
+      const btn = document.getElementById('directions-btn');
+      const metricsEl = document.getElementById('route-metrics');
+
+      btn.disabled = true;
+      btn.textContent = '📡 Locating GPS…';
+      metricsEl.textContent = '';
+
+      let origin;
+      try {
+        origin = await getCurrentGpsPosition();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = '🧭 Directions from My GPS';
+        alert(err.message);
+        return;
+      }
+
+      btn.textContent = '🛣️ Routing…';
+
+      let routeKm = 0;
+      let routeMin = 0;
+
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${selectedPlace.lng},${selectedPlace.lat}?overview=full&geometries=geojson&steps=true`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.code === 'Ok' && data.routes && data.routes[0]) {
+          const route = data.routes[0];
+          routeKm = route.distance / 1000;
+          routeMin = Math.max(3, Math.round((route.duration / 60) * 1.18));
+          drawRouteOnMap(origin, selectedPlace, route.geometry);
+        } else {
+          throw new Error('Fallback to Haversine');
+        }
+      } catch (_) {
+        const straight = haversineKm(origin.lat, origin.lng, selectedPlace.lat, selectedPlace.lng);
+        const crossesHarbour = (origin.region === 'HK') !== (selectedPlace.region === 'HK');
+        routeKm = Math.max(1.2, straight * (crossesHarbour ? 1.55 : 1.35));
+        routeMin = Math.max(4, Math.round(routeKm * 2.1));
+        drawRouteOnMap(origin, selectedPlace, null);
+      }
+
+      metricsEl.textContent = `${routeKm.toFixed(1)} km • ~${routeMin} min`;
+      btn.disabled = false;
+      btn.textContent = '🔄 Refresh Directions';
+    }
+
+    document.getElementById('directions-btn').addEventListener('click', routeFromUserGps);
+
+    // =========================================================================
+    // 8. OFFICIAL HK CSDI / LANDSD MAP (`mapapi.hkmapservice.gov.hk`)
+    // =========================================================================
+    function initOrUpdateMap() {
+      if (!leafletMap) {
+        leafletMap = L.map('mini-map', { zoomControl: false, attributionControl: true }).setView([22.285, 114.158], 14);
+        // Official HKSAR Lands Department / CSDI Topographic Basemap + Traditional Chinese Labels (Zero API Key)
+        L.tileLayer('https://mapapi.hkmapservice.gov.hk/gs/api/v1.0.0/xyz/basemap/wgs84/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '© HKSAR LandsD / CSDI'
+        }).addTo(leafletMap);
+        L.tileLayer('https://mapapi.hkmapservice.gov.hk/gs/api/v1.0.0/xyz/label/hk/tc/wgs84/{z}/{x}/{y}.png', {
+          maxZoom: 19
+        }).addTo(leafletMap);
+
+        markersLayer = L.layerGroup().addTo(leafletMap);
+      }
+      setTimeout(() => leafletMap.invalidateSize(), 80);
+    }
+
+    function showDestinationOnMap(dest) {
+      if (!leafletMap || !dest) return;
+      markersLayer.clearLayers();
+      if (routeLayer) {
+        leafletMap.removeLayer(routeLayer);
+        routeLayer = null;
+      }
+
+      const destMarker = L.circleMarker([dest.lat, dest.lng], {
+        radius: 10,
+        fillColor: '#e11d48',
+        color: '#facc15',
+        weight: 3,
+        fillOpacity: 1
+      }).bindPopup(`<b>${escapeHtml(dest.driverZh || dest.nameZh)}</b><br>${escapeHtml(dest.nameEn)}`);
+
+      markersLayer.addLayer(destMarker);
+      leafletMap.setView([dest.lat, dest.lng], 16);
+      setTimeout(() => {
+        leafletMap.invalidateSize();
+        leafletMap.setView([dest.lat, dest.lng], 16);
+      }, 100);
+    }
+
+    function drawRouteOnMap(origin, dest, geojsonGeometry) {
+      if (!leafletMap) return;
+      markersLayer.clearLayers();
+      if (routeLayer) {
+        leafletMap.removeLayer(routeLayer);
+        routeLayer = null;
+      }
+
+      const originMarker = L.circleMarker([origin.lat, origin.lng], {
+        radius: 7,
+        fillColor: '#38bdf8',
+        color: '#fff',
+        weight: 2,
+        fillOpacity: 1
+      }).bindPopup('Start');
+
+      const destMarker = L.circleMarker([dest.lat, dest.lng], {
+        radius: 9,
+        fillColor: '#e11d48',
+        color: '#facc15',
+        weight: 3,
+        fillOpacity: 1
+      }).bindPopup(`<b>${escapeHtml(dest.driverZh || dest.nameZh)}</b><br>${escapeHtml(dest.nameEn)}`);
+
+      markersLayer.addLayer(originMarker);
+      markersLayer.addLayer(destMarker);
+
+      if (geojsonGeometry) {
+        routeLayer = L.geoJSON(geojsonGeometry, {
+          style: { color: '#e11d48', weight: 4.5, opacity: 0.88 }
+        }).addTo(leafletMap);
+        leafletMap.fitBounds(routeLayer.getBounds(), { padding: [26, 26] });
+      } else {
+        routeLayer = L.polyline(
+          [
+            [origin.lat, origin.lng],
+            [dest.lat, dest.lng]
+          ],
+          { color: '#e11d48', weight: 3.5, dashArray: '6, 8' }
+        ).addTo(leafletMap);
+        leafletMap.fitBounds(routeLayer.getBounds(), { padding: [30, 30] });
+      }
+    }
+
+    // =========================================================================
+    // 9. HOME BUTTON & SERVICE WORKER REGISTRATION
+    // =========================================================================
+    document.getElementById('brand-home-btn').addEventListener('click', () => {
+      if (searchAbortCtrl) searchAbortCtrl.abort();
+      csdiLoader.classList.remove('show');
+      searchInput.value = '';
+      clearBtn.classList.remove('visible');
+      activeCategory = 'ALL';
+      document.querySelectorAll('.cat-pill').forEach((b) => b.classList.toggle('active', b.dataset.cat === 'ALL'));
+      closePlaceDetail(false);
+      renderCurrentView();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    function escapeHtml(s = '') {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+    function escapeAttr(s = '') {
+      return escapeHtml(s).replace(/'/g, '&#39;');
+    }
+
+    // Pre-warm speech voices on iOS/macOS
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.getVoices();
+    }
+
+    // Initial render
+    renderCurrentView();
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
+

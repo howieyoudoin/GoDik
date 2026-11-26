@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
   <meta name="apple-mobile-web-app-title" content="GoDik" />
   <meta name="theme-color" content="#090d16" />
   <title>GoDik v1.3 — Bilingual Driver Card & CSDI Map</title>
@@ -58,11 +58,9 @@
       position: sticky;
       top: 0;
       z-index: 40;
-      background: rgba(9, 13, 22, 0.88);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      background: var(--bg);
       border-bottom: 1px solid var(--border);
-      padding: calc(env(safe-area-inset-top, 12px) + 16px) 16px 12px;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px;
     }
 
     .brand-row {
@@ -463,7 +461,7 @@
     /* Primary Card Action Bar */
     .card-actions {
       display: grid;
-      grid-template-columns: 1fr 1fr auto auto auto;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
       gap: 6px;
     }
 
@@ -472,14 +470,14 @@
       color: #fff;
       border: none;
       border-radius: 13px;
-      padding: 12px 10px;
-      font-size: 13.5px;
+      padding: 11px 8px;
+      font-size: 13px;
       font-weight: 800;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 5px;
       white-space: nowrap;
     }
     .primary-btn.secondary {
@@ -792,17 +790,14 @@
             ⛶ Fullscreen
           </button>
           <button class="primary-btn secondary" id="speak-btn">
-            🔊 Speak Cantonese
+            🔊 Speak Canto
           </button>
           <button class="primary-btn secondary" id="notes-tray-btn" title="Add Tunnel / Payment Note">
             🛣️
           </button>
-          <button class="primary-btn secondary" id="copy-btn" title="Copy Chinese Address">
-            📋
-          </button>
-          <button class="primary-btn secondary" id="gmaps-btn" title="Open in Google Maps (繁體中文)">
+          <a class="primary-btn secondary" id="gmaps-btn" href="#" target="_blank" rel="noopener noreferrer" style="text-decoration: none;" title="Open in Google Maps (繁體中文)">
             🗺️
-          </button>
+          </a>
         </div>
 
         <!-- One-Tap Driver Route & Payment Instructions (Collapsible Tray) -->
@@ -1444,6 +1439,13 @@
         .join('');
 
       updateJyutpingDisplay();
+
+      // Update Google Maps external Universal Link (Traditional Chinese)
+      const zhName = selectedPlace.nameZh || selectedPlace.driverZh || '';
+      const zhStreet = selectedPlace.streetZh || '';
+      const zhDistrict = selectedPlace.districtZh || '';
+      const gmQuery = [zhName, zhStreet, zhDistrict, '香港'].filter(Boolean).join(' ').trim();
+      document.getElementById('gmaps-btn').href = `https://maps.google.com/?q=${encodeURIComponent(gmQuery)}&hl=zh-HK`;
     }
 
     function updateJyutpingDisplay() {
@@ -1540,29 +1542,6 @@
 
     document.getElementById('speak-btn').addEventListener('click', () => speakCantonese(buildSpokenDestinationPhrase()));
     document.getElementById('fs-speak-btn').addEventListener('click', () => speakCantonese(buildSpokenDestinationPhrase()));
-
-    // Copy Chinese Address
-    document.getElementById('copy-btn').addEventListener('click', async () => {
-      if (!selectedPlace) return;
-      const txt = `${selectedPlace.districtZh} ${selectedPlace.driverZh || selectedPlace.nameZh} ${selectedPlace.streetZh || ''}`.trim();
-      try {
-        await navigator.clipboard.writeText(txt);
-        const btn = document.getElementById('copy-btn');
-        btn.textContent = '✅';
-        setTimeout(() => (btn.textContent = '📋'), 1400);
-      } catch (_) {}
-    });
-
-    // Open Searched Location in Google Maps (Traditional Chinese)
-    document.getElementById('gmaps-btn').addEventListener('click', () => {
-      if (!selectedPlace) return;
-      const zhName = selectedPlace.nameZh || selectedPlace.driverZh || '';
-      const zhStreet = selectedPlace.streetZh || '';
-      const zhDistrict = selectedPlace.districtZh || '';
-      const query = [zhName, zhStreet, zhDistrict, '香港'].filter(Boolean).join(' ').trim();
-      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}&hl=zh-HK`;
-      window.open(url, '_blank', 'noopener,noreferrer');
-    });
 
     // Contrast & Fullscreen Modal Toggles
     document.getElementById('contrast-toggle-btn').addEventListener('click', () => {

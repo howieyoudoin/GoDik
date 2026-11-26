@@ -1466,9 +1466,11 @@
       }
     }
 
-    // Cantonese Voice Synthesizer (`zh-HK`) — hardened for iOS Standalone PWA
+    // Cantonese Voice Synthesizer (`zh-HK`) — iOS Standalone PWA uses <audio> MP3 (Web Speech API is often silent in iOS PWAs)
     let cachedVoices = [];
-    let audioCtx = null;
+    const ttsAudio = new Audio();
+    ttsAudio.preload = 'none';
+
     if ('speechSynthesis' in window) {
       const loadVoices = () => {
         cachedVoices = window.speechSynthesis.getVoices() || [];
@@ -1477,23 +1479,32 @@
       window.speechSynthesis.onvoiceschanged = loadVoices;
     }
 
-    function unlockIosAudio() {
-      try {
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        if (!Ctx) return;
-        if (!audioCtx) audioCtx = new Ctx();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-      } catch (_) {}
+    function isIosStandalonePwa() {
+      const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+      return isIos && isStandalone;
     }
 
-    function speakCantonese(text) {
-      if (!text) return;
+    function playCantoneseAudioFallback(text, onFail) {
+      try {
+        ttsAudio.pause();
+        ttsAudio.src = `https://translate.google.com/translate_tts?ie=UTF-8&tl=yue&client=tw-ob&q=${encodeURIComponent(text.slice(0, 180))}`;
+        const playPromise = ttsAudio.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+          playPromise.catch(() => {
+            if (onFail) onFail();
+          });
+        }
+      } catch (_) {
+        if (onFail) onFail();
+      }
+    }
+
+    function speakWithWebSpeech(text, onFail) {
       if (!('speechSynthesis' in window)) {
-        alert('Speech synthesis is not supported in this browser.');
+        if (onFail) onFail();
         return;
       }
-      unlockIosAudio();
-
       const synth = window.speechSynthesis;
       const voices = cachedVoices.length ? cachedVoices : synth.getVoices();
       const hkVoice =
@@ -1502,28 +1513,45 @@
         voices.find((v) => v.lang.toLowerCase().startsWith('zh'));
 
       const doSpeak = (useVoiceObj) => {
+        let started = false;
         const utter = new SpeechSynthesisUtterance(text);
         if (useVoiceObj && hkVoice) utter.voice = hkVoice;
         utter.lang = 'zh-HK';
         utter.rate = 0.9;
         utter.volume = 1.0;
+        utter.onstart = () => { started = true; };
         utter.onerror = () => {
           if (useVoiceObj && hkVoice) doSpeak(false);
+          else if (onFail) onFail();
         };
-        // Keep global ref so iOS WebKit does not GC the utterance mid-speech
         window.__activeUtterance = utter;
         if (synth.paused) synth.resume();
         synth.speak(utter);
+
+        // If iOS silently drops speechSynthesis without firing onstart/onerror, fall back
+        setTimeout(() => {
+          if (!started && onFail) onFail();
+        }, 400);
       };
 
-      // In iOS standalone PWA, calling cancel() unconditionally or calling speak()
-      // synchronously right after cancel() can silently drop the utterance.
       if (synth.speaking || synth.pending) {
         synth.cancel();
         setTimeout(() => doSpeak(true), 60);
       } else {
         doSpeak(true);
       }
+    }
+
+    function speakCantonese(text) {
+      if (!text) return;
+      // In iOS standalone PWA, call <audio>.play() synchronously in the tap handler
+      if (isIosStandalonePwa() && navigator.onLine) {
+        playCantoneseAudioFallback(text, () => speakWithWebSpeech(text));
+        return;
+      }
+      speakWithWebSpeech(text, () => {
+        if (navigator.onLine) playCantoneseAudioFallback(text);
+      });
     }
 
     function buildSpokenDestinationPhrase() {

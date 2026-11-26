@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-title" content="GoDik" />
   <meta name="theme-color" content="#090d16" />
   <meta name="referrer" content="no-referrer" />
-  <title>GoDik v1.3 — Bilingual Driver Card & CSDI Map</title>
+  <title>GoDik v1.4 — Bilingual Driver Card & CSDI Map</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
@@ -551,15 +551,24 @@
     /* Official CSDI Map Container */
     .map-actions-row {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
+      flex-direction: column;
+      gap: 6px;
       margin-bottom: 10px;
+    }
+    .map-btn-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
     }
     .map-metrics {
       font-size: 12px;
       font-weight: 700;
       color: #38bdf8;
+      text-align: center;
+    }
+    .map-metrics:empty {
+      display: none;
     }
     #mini-map {
       width: 100%;
@@ -568,6 +577,23 @@
       overflow: hidden;
       border: 1px solid var(--border);
       background: #0f172a;
+    }
+    .panel.map-fullscreen {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      border-radius: 0;
+      border: none;
+      margin: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      padding: calc(env(safe-area-inset-top, 0px) + 12px) 14px calc(env(safe-area-inset-bottom, 0px) + 14px);
+    }
+    .panel.map-fullscreen #mini-map {
+      flex: 1;
+      height: auto;
+      min-height: 0;
     }
 
     /* FULLSCREEN SHOW-DRIVER MODAL */
@@ -733,9 +759,9 @@
 
     <!-- Category Pills (Shown on Home / Search View) -->
     <div class="filter-scroll" id="category-bar">
-      <button class="cat-pill active" data-cat="ALL">All Popular</button>
+      <button class="cat-pill active" data-cat="RECENT">🕘 Recent</button>
       <button class="cat-pill" data-cat="SAVED">★ Saved</button>
-      <button class="cat-pill" data-cat="RECENT">🕘 Recent</button>
+      <button class="cat-pill" data-cat="ALL">All Popular</button>
       <button class="cat-pill" data-cat="Transport">✈️ Transport & Borders</button>
       <button class="cat-pill" data-cat="Office / Mall">🏢 Offices & Malls</button>
       <button class="cat-pill" data-cat="Nightlife & Culture">🍸 Nightlife & Arts</button>
@@ -748,10 +774,17 @@
       <!-- LIST / SEARCH VIEW -->
       <section id="list-view">
         <div class="section-header">
-          <span id="results-heading">Popular Hong Kong Destinations</span>
+          <span id="results-heading">🕘 Recently Viewed</span>
           <span class="loader-inline" id="csdi-loader">Searching HK CSDI…</span>
         </div>
         <div class="place-list" id="place-list"></div>
+
+        <div id="popular-under-recent">
+          <div class="section-header" style="margin-top: 18px;">
+            <span>Popular Hong Kong Destinations</span>
+          </div>
+          <div class="place-list" id="popular-place-list"></div>
+        </div>
 
         <!-- Quick Driver Phrases at Bottom of Home -->
         <div class="panel" id="phrases-panel" style="margin-top: 18px;">
@@ -822,12 +855,17 @@
         </div>
 
         <!-- Official HK LandsD / CSDI Bilingual Map Preview -->
-        <div class="panel">
-          <div class="map-actions-row" style="flex-direction: column; align-items: stretch; gap: 6px;">
-            <button class="primary-btn" id="directions-btn" style="width: 100%; background: var(--taxi-blue);">
-              🧭 Directions from my location
-            </button>
-            <span class="map-metrics" id="route-metrics" style="text-align: center;"></span>
+        <div class="panel" id="map-panel">
+          <div class="map-actions-row">
+            <div class="map-btn-row">
+              <button class="primary-btn" id="directions-btn" style="width: 100%; background: var(--taxi-blue);">
+                Directions from my location
+              </button>
+              <button class="primary-btn secondary" id="map-fs-btn" title="Fullscreen Map" style="padding: 11px 12px;">
+                ⛶
+              </button>
+            </div>
+            <span class="map-metrics" id="route-metrics"></span>
           </div>
           <div id="mini-map"></div>
         </div>
@@ -1050,7 +1088,7 @@
     let savedPlacesMap = JSON.parse(localStorage.getItem(STORAGE_FAVS + '_obj') || '{}');
     let recentPlaces = JSON.parse(localStorage.getItem(STORAGE_RECENT) || '[]');
 
-    let activeCategory = 'ALL';
+    let activeCategory = 'RECENT';
     let selectedPlace = null;
     let selectedTunnel = null; // 'WHC' | 'CHT' | 'EHC' | 'AUTO' | null
     let selectedExtraNotes = new Set();
@@ -1212,13 +1250,13 @@
     const resultsHeading = document.getElementById('results-heading');
     const csdiLoader = document.getElementById('csdi-loader');
 
-    function renderPlaceList(places, emptyText = 'No matching Hong Kong locations found.') {
+    function renderPlaceList(places, emptyText = 'No matching Hong Kong locations found.', targetEl = placeListEl) {
       if (!places || places.length === 0) {
-        placeListEl.innerHTML = `<div class="empty-msg">${emptyText}</div>`;
+        targetEl.innerHTML = `<div class="empty-msg">${emptyText}</div>`;
         return;
       }
 
-      placeListEl.innerHTML = places
+      targetEl.innerHTML = places
         .map((p) => {
           const isSaved = savedIds.includes(p.id);
           let badgeHtml = '';
@@ -1248,7 +1286,7 @@
         .join('');
 
       // Attach click handlers
-      placeListEl.querySelectorAll('.place-item').forEach((row, idx) => {
+      targetEl.querySelectorAll('.place-item').forEach((row, idx) => {
         const placeObj = places[idx];
         row.addEventListener('click', (e) => {
           if (e.target.closest('.fav-star-btn')) {
@@ -1279,6 +1317,8 @@
       closePlaceDetail(false);
 
       // 1) Instant 0ms offline curated matches
+      const popularUnderRecent = document.getElementById('popular-under-recent');
+      if (popularUnderRecent) popularUnderRecent.style.display = 'none';
       const localHits = searchOfflineCurated(q);
       resultsHeading.textContent = `Results for "${q}"`;
       renderPlaceList(localHits, 'Searching HK CSDI LocationSearch…');
@@ -1338,6 +1378,10 @@
 
     function renderCurrentView() {
       const offlineList = window.HK_OFFLINE_PLACES || [];
+      const popularUnderRecent = document.getElementById('popular-under-recent');
+      const popularListEl = document.getElementById('popular-place-list');
+      if (popularUnderRecent) popularUnderRecent.style.display = activeCategory === 'RECENT' ? 'block' : 'none';
+
       if (activeCategory === 'SAVED') {
         resultsHeading.textContent = '★ Saved Destinations';
         const list = savedIds.map((id) => savedPlacesMap[id] || offlineList.find((p) => p.id === id)).filter(Boolean);
@@ -1345,6 +1389,7 @@
       } else if (activeCategory === 'RECENT') {
         resultsHeading.textContent = '🕘 Recently Viewed';
         renderPlaceList(recentPlaces, 'Your recently opened taxi flashcards will appear here.');
+        if (popularListEl) renderPlaceList(offlineList, 'No popular locations loaded.', popularListEl);
       } else if (activeCategory === 'ALL') {
         resultsHeading.textContent = 'Popular Hong Kong Destinations';
         renderPlaceList(offlineList);
@@ -1387,8 +1432,9 @@
 
       document.getElementById('route-metrics').textContent = '';
       const dirBtn = document.getElementById('directions-btn');
-      dirBtn.textContent = '🧭 Directions from my location';
+      dirBtn.textContent = 'Directions from my location';
       dirBtn.disabled = false;
+      setMapFullscreen(false);
 
       document.getElementById('notes-tray-panel').classList.remove('open');
       updateNotesTrayBtnState();
@@ -1401,6 +1447,7 @@
     }
 
     function closePlaceDetail(restoreList = true) {
+      setMapFullscreen(false);
       document.getElementById('detail-view').classList.remove('active');
       document.getElementById('list-view').style.display = 'block';
       document.getElementById('category-bar').style.display = 'flex';
@@ -1722,7 +1769,7 @@
         origin = await getCurrentGpsPosition();
       } catch (err) {
         btn.disabled = false;
-        btn.textContent = '🧭 Directions from my location';
+        btn.textContent = 'Directions from my location';
         alert(err.message);
         return;
       }
@@ -1758,6 +1805,22 @@
     }
 
     document.getElementById('directions-btn').addEventListener('click', routeFromUserGps);
+
+    function setMapFullscreen(open) {
+      const panel = document.getElementById('map-panel');
+      const fsBtn = document.getElementById('map-fs-btn');
+      panel.classList.toggle('map-fullscreen', open);
+      fsBtn.textContent = open ? '✕' : '⛶';
+      fsBtn.title = open ? 'Exit Fullscreen Map' : 'Fullscreen Map';
+      if (leafletMap) {
+        setTimeout(() => leafletMap.invalidateSize(), 60);
+      }
+    }
+
+    document.getElementById('map-fs-btn').addEventListener('click', () => {
+      const isOpen = document.getElementById('map-panel').classList.contains('map-fullscreen');
+      setMapFullscreen(!isOpen);
+    });
 
     // =========================================================================
     // 8. OFFICIAL HK CSDI / LANDSD MAP (`mapapi.hkmapservice.gov.hk`)
@@ -1855,8 +1918,8 @@
       csdiLoader.classList.remove('show');
       searchInput.value = '';
       clearBtn.classList.remove('visible');
-      activeCategory = 'ALL';
-      document.querySelectorAll('.cat-pill').forEach((b) => b.classList.toggle('active', b.dataset.cat === 'ALL'));
+      activeCategory = 'RECENT';
+      document.querySelectorAll('.cat-pill').forEach((b) => b.classList.toggle('active', b.dataset.cat === 'RECENT'));
       closePlaceDetail(false);
       renderCurrentView();
       window.scrollTo({ top: 0, behavior: 'smooth' });

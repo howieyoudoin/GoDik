@@ -8,7 +8,8 @@
   <meta name="apple-mobile-web-app-title" content="GoDik" />
   <meta name="theme-color" content="#090d16" />
   <meta name="referrer" content="no-referrer" />
-  <title>GoDik v1.4 — Bilingual Driver Card & CSDI Map</title>
+  <!-- GoDik v1.6 -->
+  <title>GoDik - Taxi Card</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
@@ -28,6 +29,44 @@
       --taxi-blue-soft: rgba(2, 132, 199, 0.16);
       --amber: #facc15;
       --csdi-teal: #14b8a6;
+    }
+
+    body.light-mode {
+      --bg: #f8fafc;
+      --bg-card: #ffffff;
+      --bg-elevated: #e2e8f0;
+      --border: rgba(15, 23, 42, 0.12);
+      --text: #0f172a;
+      --muted: #475569;
+    }
+    body.light-mode #search-input {
+      border-color: rgba(15, 23, 42, 0.18);
+    }
+    body.light-mode .place-zh,
+    body.light-mode .phrase-zh {
+      color: #0f172a;
+    }
+    body.light-mode .place-en {
+      color: #334155;
+    }
+    body.light-mode .district-badge {
+      background: rgba(15, 23, 42, 0.08);
+      color: #1e293b;
+    }
+    body.light-mode .mod-chip,
+    body.light-mode .primary-btn.secondary {
+      color: #0f172a;
+    }
+    body.light-mode .mod-chip.selected {
+      background: rgba(250, 204, 21, 0.28);
+      color: #854d0e;
+      border-color: #ca8a04;
+    }
+    body.light-mode .phrase-jyutping {
+      color: #0284c7;
+    }
+    body.light-mode .driver-card {
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
     }
 
     * {
@@ -116,6 +155,48 @@
     }
     .icon-btn:active {
       transform: scale(0.97);
+    }
+
+    /* Sun / Moon Pill Theme Toggle */
+    .theme-pill {
+      display: inline-flex;
+      align-items: center;
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      padding: 3px;
+      gap: 2px;
+      cursor: pointer;
+      height: 32px;
+    }
+    .theme-pill:active {
+      transform: scale(0.97);
+    }
+    .theme-pill-opt {
+      width: 28px;
+      height: 24px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #64748b;
+      transition: background 0.18s ease, color 0.18s ease;
+    }
+    .theme-pill-opt.moon-opt {
+      background: #29354d;
+      color: #ffffff;
+    }
+    body.light-mode .theme-pill {
+      background: #f1f5f9;
+      border-color: rgba(15, 23, 42, 0.14);
+    }
+    body.light-mode .theme-pill-opt.moon-opt {
+      background: transparent;
+      color: #94a3b8;
+    }
+    body.light-mode .theme-pill-opt.sun-opt {
+      background: #e2e8f0;
+      color: #090d16;
     }
 
     /* Search Input */
@@ -347,10 +428,24 @@
       background: linear-gradient(165deg, #ffffff 0%, #f1f5f9 100%);
       color: #090d16;
       border-radius: 20px;
-      padding: 18px 18px 16px;
+      padding: 18px 18px 28px;
       box-shadow: 0 14px 34px rgba(0, 0, 0, 0.48);
       border: 3px solid var(--amber);
       position: relative;
+      cursor: pointer;
+    }
+    .card-fs-corner {
+      position: absolute;
+      bottom: 10px;
+      right: 12px;
+      color: #64748b;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.78;
+    }
+    .driver-card.high-contrast-dark .card-fs-corner {
+      color: #94a3b8;
     }
     .driver-card.high-contrast-dark {
       background: #000000;
@@ -448,12 +543,19 @@
       color: #090d16;
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     }
+    .jyutping-dist {
+      color: #0d9488;
+      font-weight: 700;
+    }
     .jyutping-loc {
       color: #0284c7;
       font-weight: 700;
     }
     .driver-card.high-contrast-dark .jyutping-line {
       color: #f8fafc;
+    }
+    .driver-card.high-contrast-dark .jyutping-dist {
+      color: #2dd4bf;
     }
     .driver-card.high-contrast-dark .jyutping-loc {
       color: #38bdf8;
@@ -462,8 +564,8 @@
     /* Primary Card Action Bar */
     .card-actions {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
-      gap: 6px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+      gap: 8px;
     }
 
     .primary-btn {
@@ -736,9 +838,22 @@
         <div class="brand">
           <button type="button" class="taxi-roof-badge" id="brand-home-btn" title="Back to Homepage">GoDik 的士</button>
         </div>
-        <div class="top-actions">
+        <div class="top-actions" style="align-items: center;">
           <button class="icon-btn" id="phrases-jump-btn" title="Jump to Instant Cantonese Taxi Phrases">
-            🗣️ Phrases
+            Phrases
+          </button>
+          <button type="button" class="theme-pill js-theme-toggle" id="theme-toggle-btn" aria-label="Toggle Light / Dark Mode" title="Toggle Light / Dark Mode">
+            <span class="theme-pill-opt sun-opt" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                <circle cx="12" cy="12" r="4"/>
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+              </svg>
+            </span>
+            <span class="theme-pill-opt moon-opt" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+            </span>
           </button>
         </div>
       </div>
@@ -759,9 +874,9 @@
 
     <!-- Category Pills (Shown on Home / Search View) -->
     <div class="filter-scroll" id="category-bar">
-      <button class="cat-pill active" data-cat="RECENT">🕘 Recent</button>
+      <button class="cat-pill active" data-cat="RECENT">Recent</button>
       <button class="cat-pill" data-cat="SAVED">★ Saved</button>
-      <button class="cat-pill" data-cat="ALL">All Popular</button>
+      <button class="cat-pill" data-cat="ALL">Popular</button>
       <button class="cat-pill" data-cat="Transport">✈️ Transport & Borders</button>
       <button class="cat-pill" data-cat="Office / Mall">🏢 Offices & Malls</button>
       <button class="cat-pill" data-cat="Nightlife & Culture">🍸 Nightlife & Arts</button>
@@ -774,7 +889,7 @@
       <!-- LIST / SEARCH VIEW -->
       <section id="list-view">
         <div class="section-header">
-          <span id="results-heading">🕘 Recently Viewed</span>
+          <span id="results-heading"></span>
           <span class="loader-inline" id="csdi-loader">Searching HK CSDI…</span>
         </div>
         <div class="place-list" id="place-list"></div>
@@ -800,15 +915,14 @@
         <div class="back-row">
           <button class="icon-btn" id="back-btn">← Back to Search</button>
           <div style="display:flex; gap:6px;">
-            <button class="icon-btn" id="contrast-toggle-btn" title="Switch White / OLED Black Card">🌗 Contrast</button>
             <button class="icon-btn" id="detail-fav-btn">☆ Save</button>
           </div>
         </div>
 
         <!-- Show-to-Driver Flashcard -->
-        <div class="driver-card" id="driver-card">
+        <div class="driver-card" id="driver-card" title="Tap anywhere on card for fullscreen">
           <div class="card-header-strip">
-            <span class="driver-polite-tag">司機唔該去 (Driver, please go to)</span>
+            <span class="driver-polite-tag">司機唔該去</span>
             <span class="card-district-zh" id="card-district-zh">中環</span>
           </div>
           <div class="card-dest-zh" id="card-dest-zh">國際金融中心二期</div>
@@ -816,21 +930,29 @@
           <div class="active-driver-chips" id="card-driver-chips"></div>
           <div class="card-en-sub" id="card-en-sub">Two International Finance Centre • 8 Finance Street, Central</div>
           <div class="jyutping-line" id="card-jyutping"></div>
+          <span class="card-fs-corner" aria-hidden="true">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+            </svg>
+          </span>
         </div>
 
         <!-- Big Action Buttons -->
         <div class="card-actions">
-          <button class="primary-btn" id="fullscreen-btn">
-            ⛶ Fullscreen
-          </button>
-          <button class="primary-btn secondary" id="speak-btn">
-            🔊 Speak Canto
+          <button class="primary-btn" id="speak-btn">
+            🔊 Speak Cantonese
           </button>
           <button class="primary-btn secondary" id="notes-tray-btn" title="Add Tunnel / Payment Note">
-            🛣️
+            Add ons
           </button>
-          <a class="primary-btn secondary" id="gmaps-btn" href="#" target="_blank" rel="noopener noreferrer" style="text-decoration: none;" title="Open in Google Maps (繁體中文)">
-            🗺️
+          <a class="primary-btn secondary" id="gmaps-btn" href="#" target="_blank" rel="noopener noreferrer" style="text-decoration: none; padding: 10px 12px;" title="Open in Google Maps (繁體中文)">
+            <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="#1a73e8" d="M12 2C8.13 2 5 5.13 5 9c0 1.74.5 3.37 1.41 4.84.95 1.54 2.2 2.86 3.16 4.4.47.75.81 1.45 1.17 2.26.26.55.47 1.5 1.26 1.5s1-.95 1.26-1.5c.37-.81.7-1.51 1.17-2.26.96-1.53 2.21-2.85 3.16-4.4C18.5 12.37 19 10.74 19 9c0-3.87-3.13-7-7-7z"/>
+              <path fill="#ea4335" d="M12 2C9.42 2 7.17 3.4 5.96 5.48L10.3 9.1l4.94-5.9C14.28 2.44 13.19 2 12 2z"/>
+              <path fill="#fbbc04" d="M5.96 5.48A6.96 6.96 0 0 0 5 9c0 1.74.5 3.37 1.41 4.84l3.89-4.74-4.34-3.62z"/>
+              <path fill="#34a853" d="M6.41 13.84c.95 1.54 2.2 2.86 3.16 4.4.47.75.81 1.45 1.17 2.26.26.55.47 1.5 1.26 1.5s1-.95 1.26-1.5c.37-.81.7-1.51 1.17-2.26.96-1.53 2.21-2.85 3.16-4.4.35-.57.64-1.15.86-1.76L10.3 9.1l-3.89 4.74z"/>
+              <circle fill="#ffffff" cx="12" cy="9" r="2.6"/>
+            </svg>
           </a>
         </div>
 
@@ -847,10 +969,9 @@
             <button class="mod-chip" data-group="tunnel" data-zh="行最快路線" data-tunnel="AUTO">最快 Fastest Route</button>
           </div>
           <div class="chip-group" id="extra-chips">
-            <button class="mod-chip" data-zh="收唔收八達通？">💳 Octopus? (八達通)</button>
-            <button class="mod-chip" data-zh="收唔收 PayMe / 支付寶？">📱 PayMe / Alipay?</button>
-            <button class="mod-chip" data-zh="唔該要單">🧾 Receipt please (要單)</button>
-            <button class="mod-chip" data-zh="前面有落唔該">🛑 Drop off ahead (前面有落)</button>
+            <button class="mod-chip" data-zh="收唔收八達通？">八達通 Octopus?</button>
+            <button class="mod-chip" data-zh="收唔收 PayMe / 支付寶？">PayMe / Alipay?</button>
+            <button class="mod-chip" data-zh="要單">要單 Receipt</button>
           </div>
         </div>
 
@@ -876,9 +997,21 @@
   <!-- FULLSCREEN DRIVER DISPLAY MODAL -->
   <div id="fullscreen-modal">
     <div class="fs-top">
-      <span class="driver-polite-tag" style="font-size:16px; padding:6px 12px;">司機唔該去 • Show to Driver</span>
-      <div style="display:flex; gap:8px;">
-        <button class="icon-btn" id="fs-theme-btn">🌗 Invert</button>
+      <span class="driver-polite-tag" style="font-size:16px; padding:6px 12px;">司機唔該去</span>
+      <div style="display:flex; gap:8px; align-items: center;">
+        <button type="button" class="theme-pill js-theme-toggle" id="fs-theme-btn" aria-label="Toggle Light / Dark Mode" title="Toggle Light / Dark Mode">
+          <span class="theme-pill-opt sun-opt" aria-hidden="true">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+              <circle cx="12" cy="12" r="4"/>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+            </svg>
+          </span>
+          <span class="theme-pill-opt moon-opt" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          </span>
+        </button>
         <button class="icon-btn" id="fs-close-btn">✕ Close</button>
       </div>
     </div>
@@ -890,7 +1023,7 @@
     </div>
     <div class="fs-bottom">
       <button class="primary-btn" id="fs-speak-btn" style="flex:1; font-size:16px; padding:15px;">
-        🔊 廣東話發音 (Speak Cantonese)
+        🔊 Speak Cantonese
       </button>
     </div>
   </div>
@@ -1105,14 +1238,14 @@
       .catch(() => {});
 
     const QUICK_PHRASES = [
-      { zh: '唔該，前面轉左', jyutping: 'm4 goi1, cin4 min6 zyun3 zo2', en: 'Turn left ahead, please' },
-      { zh: '唔該，前面轉右', jyutping: 'm4 goi1, cin4 min6 zyun3 jau6', en: 'Turn right ahead, please' },
-      { zh: '唔該，前面有落', jyutping: 'm4 goi1, cin4 min6 jau5 lok6', en: 'Drop off just ahead, please' },
+      { zh: '唔該前面轉左', jyutping: 'm4 goi1 cin4 min6 zyun3 zo2', en: 'Turn left ahead, please' },
+      { zh: '唔該前面轉右', jyutping: 'm4 goi1 cin4 min6 zyun3 jau6', en: 'Turn right ahead, please' },
+      { zh: '唔該前面有落', jyutping: 'm4 goi1 cin4 min6 jau5 lok6', en: 'Drop off just ahead, please' },
       { zh: '唔該要張單', jyutping: 'm4 goi1 jiu3 zoeng1 daan1', en: 'Receipt please' },
-      { zh: '唔該，左邊有落', jyutping: 'm4 goi1, zo2 bin1 jau5 lok6', en: 'Drop off on the left side, please' },
-      { zh: '唔該，右邊有落', jyutping: 'm4 goi1, jau6 bin1 jau5 lok6', en: 'Drop off on the right side, please' },
+      { zh: '唔該左邊有落', jyutping: 'm4 goi1 zo2 bin1 jau5 lok6', en: 'Drop off on the left side, please' },
+      { zh: '唔該右邊有落', jyutping: 'm4 goi1 jau6 bin1 jau5 lok6', en: 'Drop off on the right side, please' },
       { zh: '收唔收八達通？', jyutping: 'sau1 m4 sau1 baat3 daat6 tung1?', en: 'Do you take Octopus?' },
-      { zh: '唔該，前面直行', jyutping: 'm4 goi1, cin4 min6 zik6 hang4', en: 'Go straight ahead, please' },
+      { zh: '唔該前面直行', jyutping: 'm4 goi1 cin4 min6 zik6 hang4', en: 'Go straight ahead, please' },
       { zh: '唔該開尾箱擺行李', jyutping: 'm4 goi1 hoi1 mei5 soeng1 baai2 hang4 lei5', en: 'Open the boot for luggage, please' },
       { zh: '唔使找，唔該晒！', jyutping: 'm4 sai2 zaau2, m4 goi1 saai3!', en: 'Keep the change, thank you!' }
     ];
@@ -1259,19 +1392,11 @@
       targetEl.innerHTML = places
         .map((p) => {
           const isSaved = savedIds.includes(p.id);
-          let badgeHtml = '';
-          if (p.source === 'CSDI') {
-            badgeHtml = `<span class="source-tag source-csdi">HK CSDI</span>`;
-          } else if (p.source === 'ALS') {
-            badgeHtml = `<span class="source-tag source-als">GovHK ALS</span>`;
-          }
-
           return `
             <div class="place-item" data-id="${escapeAttr(p.id)}">
               <div class="place-main">
                 <div class="place-top-meta">
                   <span class="district-badge">${escapeHtml(p.districtZh)} • ${escapeHtml(p.districtEn)}</span>
-                  ${badgeHtml}
                 </div>
                 <div class="place-zh">${escapeHtml(p.driverZh || p.nameZh)}</div>
                 <div class="place-en">${escapeHtml(p.nameEn)}</div>
@@ -1381,20 +1506,17 @@
       const popularUnderRecent = document.getElementById('popular-under-recent');
       const popularListEl = document.getElementById('popular-place-list');
       if (popularUnderRecent) popularUnderRecent.style.display = activeCategory === 'RECENT' ? 'block' : 'none';
+      resultsHeading.textContent = '';
 
       if (activeCategory === 'SAVED') {
-        resultsHeading.textContent = '★ Saved Destinations';
         const list = savedIds.map((id) => savedPlacesMap[id] || offlineList.find((p) => p.id === id)).filter(Boolean);
         renderPlaceList(list, 'Tap ☆ on any building or address to save it offline here.');
       } else if (activeCategory === 'RECENT') {
-        resultsHeading.textContent = '🕘 Recently Viewed';
         renderPlaceList(recentPlaces, 'Your recently opened taxi flashcards will appear here.');
         if (popularListEl) renderPlaceList(offlineList, 'No popular locations loaded.', popularListEl);
       } else if (activeCategory === 'ALL') {
-        resultsHeading.textContent = 'Popular Hong Kong Destinations';
         renderPlaceList(offlineList);
       } else {
-        resultsHeading.textContent = activeCategory;
         renderPlaceList(offlineList.filter((p) => p.category === activeCategory));
       }
     }
@@ -1502,13 +1624,18 @@
         el.textContent = '';
         return;
       }
-      const destZh = selectedPlace.driverZh || selectedPlace.nameZh;
+      const destZh = selectedPlace.driverZh || selectedPlace.nameZh || '';
+      const distZh = (selectedPlace.districtZh || '').trim();
+      const includeDist = Boolean(distZh && !destZh.includes(distZh));
       try {
         const prefixJyutping = toJyutpingFn('唔該去');
+        const distJyutping = includeDist ? toJyutpingFn(distZh) : '';
         const destJyutping = toJyutpingFn(destZh);
+        const distZhSpan = includeDist ? ` <span class="jyutping-dist">${escapeHtml(distZh)}</span>` : '';
+        const distJySpan = includeDist ? ` <span class="jyutping-dist">${escapeHtml(distJyutping)}</span>` : '';
         el.innerHTML =
-          `🗣️ Cantonese: "唔該去 <span class="jyutping-loc">${escapeHtml(destZh)}</span>" → ` +
-          `${escapeHtml(prefixJyutping)} <span class="jyutping-loc">${escapeHtml(destJyutping)}</span>`;
+          `🗣️ Cantonese: "唔該去${distZhSpan} <span class="jyutping-loc">${escapeHtml(destZh)}</span>" → ` +
+          `${escapeHtml(prefixJyutping)}${distJySpan} <span class="jyutping-loc">${escapeHtml(destJyutping)}</span>`;
       } catch (_) {
         el.textContent = '';
       }
@@ -1605,7 +1732,7 @@
 
     function buildSpokenDestinationPhrase() {
       if (!selectedPlace) return '';
-      let parts = [`司機唔該去，${selectedPlace.districtZh || ''}，${selectedPlace.driverZh || selectedPlace.nameZh}`];
+      let parts = [`唔該去${selectedPlace.districtZh || ''}${selectedPlace.driverZh || selectedPlace.nameZh}`];
       if (selectedPlace.streetZh && !(selectedPlace.driverZh || '').includes(selectedPlace.streetZh)) {
         parts.push(selectedPlace.streetZh);
       }
@@ -1620,15 +1747,37 @@
     document.getElementById('speak-btn').addEventListener('click', () => speakCantonese(buildSpokenDestinationPhrase()));
     document.getElementById('fs-speak-btn').addEventListener('click', () => speakCantonese(buildSpokenDestinationPhrase()));
 
-    // Contrast & Fullscreen Modal Toggles
-    document.getElementById('contrast-toggle-btn').addEventListener('click', () => {
-      document.getElementById('driver-card').classList.toggle('high-contrast-dark');
-    });
-
+    // Unified Light / Dark Mode Toggle (Main Page + Driver Card + Fullscreen Modal)
     const fsModal = document.getElementById('fullscreen-modal');
-    document.getElementById('fullscreen-btn').addEventListener('click', () => fsModal.classList.add('open'));
+    document.getElementById('driver-card').addEventListener('click', () => fsModal.classList.add('open'));
     document.getElementById('fs-close-btn').addEventListener('click', () => fsModal.classList.remove('open'));
-    document.getElementById('fs-theme-btn').addEventListener('click', () => fsModal.classList.toggle('light-card'));
+
+    const systemLightMq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+    let userTweakedTheme = false;
+
+    function applyTheme(isLight) {
+      document.body.classList.toggle('light-mode', isLight);
+      document.getElementById('driver-card').classList.toggle('high-contrast-dark', !isLight);
+      fsModal.classList.toggle('light-card', isLight);
+      const metaTheme = document.querySelector('meta[name="theme-color"]');
+      if (metaTheme) metaTheme.setAttribute('content', isLight ? '#f8fafc' : '#090d16');
+    }
+
+    // Follow system light/dark on open
+    applyTheme(systemLightMq ? systemLightMq.matches : false);
+    if (systemLightMq && typeof systemLightMq.addEventListener === 'function') {
+      systemLightMq.addEventListener('change', (e) => {
+        if (!userTweakedTheme) applyTheme(e.matches);
+      });
+    }
+
+    document.querySelectorAll('.js-theme-toggle').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        userTweakedTheme = true;
+        const nextLight = !document.body.classList.contains('light-mode');
+        applyTheme(nextLight);
+      });
+    });
 
     // Tunnel & Note Modifier Tray Toggle & Chips
     function updateNotesTrayBtnState() {

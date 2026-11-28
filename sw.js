@@ -1,5 +1,5 @@
-const STATIC_CACHE = 'godik-static-v1';
-const API_CACHE = 'godik-api-v1';
+const STATIC_CACHE = 'godik-static-v3';
+const API_CACHE = 'godik-api-v2';
 
 const APP_SHELL = [
   './',
@@ -57,7 +57,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first for app shell
+  // Network-first for HTML navigation so GitHub Pages updates apply immediately
+  if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res && res.status === 200) {
+            const copy = res.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put(event.request, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Cache-first for static assets
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
